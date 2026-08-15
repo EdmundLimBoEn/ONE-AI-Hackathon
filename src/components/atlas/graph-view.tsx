@@ -417,13 +417,16 @@ export function GraphView({
 
   const nodeVal = useCallback((node: SimNode) => Math.max(1, (node.radius * node.radius) / 18), []);
 
-  const orderedNodes = useMemo(
-    () =>
-      index.graph.nodes
-        .filter((node) => activeCategories.has(categoryOf(node.categoryPath)))
-        .sort((a, b) => b.degree - a.degree || a.title.localeCompare(b.title)),
-    [activeCategories, index.graph.nodes],
-  );
+  const orderedNodes = useMemo(() => {
+    const rank = (role: SimNode["role"]) =>
+      role === "document" ? 0 : role === "subtopic" ? 1 : role === "topic" ? 2 : role === "domain" ? 3 : 4;
+    return [...visibleData.nodes].sort(
+      (a, b) =>
+        rank(a.role) - rank(b.role) ||
+        b.node.degree - a.node.degree ||
+        a.node.title.localeCompare(b.node.title),
+    );
+  }, [visibleData.nodes]);
 
   const focusNode = useCallback(
     (id: string | null, center = true) => {
@@ -739,7 +742,8 @@ export function GraphView({
                 }
               }}
             >
-              {node.title}, {node.citation}, {courtLabel(node.court)}, {node.degree} connections
+              {node.node.title}, {node.node.citation}, {courtLabel(node.node.court)},{" "}
+              {node.node.degree} connections
             </button>
           </li>
         ))}
