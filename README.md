@@ -1,19 +1,35 @@
 # Singapore Law Atlas
 
-Singapore Law Atlas is a graph-first research workspace for exploring Singapore judgments, following precedent links, asking citation-grounded questions, and spotting liability issues in deposition or affidavit PDFs.
+**Singapore Law Atlas** is a graph-first research workspace for Singapore **written law** (Constitution, Penal Code, Civil Law Act, and other principal Acts) and **case law**. Explore authorities as a connected graph, open statute digests with section maps, follow precedent links, ask citation-grounded questions, and spot liability issues in deposition or affidavit PDFs.
 
 Live demo: [one-ai-hackathon.edmundlim.workers.dev](https://one-ai-hackathon.edmundlim.workers.dev)
 
-> Research aid only. It is not legal advice. Verify every authority against the official judgment and check for later appellate treatment.
+Repository: [github.com/EdmundLimBoEn/Singapore-Law-Atlas](https://github.com/EdmundLimBoEn/Singapore-Law-Atlas)
 
-## What is included
+> Research aid only. It is not legal advice. Verify every authority against the official text on [Singapore Statutes Online](https://sso.agc.gov.sg) or eLitigation, and check for later appellate treatment.
 
-- Obsidian-style force graph as the default view, plus topic tree and folder explorer
-- Markdown judgment reader with wikilinks, backlinks, tags, and related precedents
-- RAG search/chat backed by Workers AI embeddings and Cloudflare Vectorize
-- Client-side PDF extraction; only extracted text is submitted for issue analysis
-- Resumable local corpus pipeline for scraping, enrichment, overviews, indexing, R2 upload, and embedding
-- Offline fixtures and local fallbacks, so the complete demo works without cloud secrets
+## Product surface
+
+| Surface | What you get |
+| --- | --- |
+| **Graph** | Force-directed map of domains (Legislation, Civil law, Criminal justice, Public law). Click **Singapore law** to open the written-law overview. |
+| **Tree / Folders** | Hierarchical browse by legal domain → topic → judgment or statute. |
+| **Reader** | Summary, relevant laws & sections, expandable full text, footer quick summary, SSO / eLitigation link. |
+| **Atlas counsel** | RAG chat over the corpus. Gear icon opens the **model system prompt** so you can view and tweak it live (saved in the browser). |
+| **Deposition analysis** | Client-side PDF/text extraction and liability issue spotting against the atlas. |
+
+## Written law first
+
+The **Legislation** domain is not an afterthought. It includes:
+
+1. **Singapore written law — overview of codes and principal Acts** (entry point when you click the red **Singapore law** hub)
+2. **Criminal codes** — Penal Code 1871, CPC 2010, Misuse of Drugs Act, Computer Misuse Act, PCA, Road Traffic Act, Evidence Act
+3. **Constitution & public law** — Constitution, Application of English Law Act, Interpretation Act
+4. **Civil & commercial** — Civil Law Act, Companies Act, IRDA, IAA, Defamation Act, POHA, PDPA
+5. **Family / employment / property** — Women’s Charter, Employment Act, WSHA, BMSMA, Land Titles Act
+6. **Procedure** — Supreme Court of Judicature Act, Evidence Act
+
+Judgments remain linked **from** those statutes so research can start with the section and move to the case.
 
 ## Architecture
 
@@ -29,7 +45,7 @@ flowchart LR
   end
   subgraph worker [Next.js on Cloudflare Workers]
     UI[Graph / Tree / Folders / Reader] --> API[Route handlers]
-    CHAT[RAG chat] --> API
+    CHAT[RAG chat + editable system prompt] --> API
     PDF[Client-side pdf.js] --> API
     API --> R2
     API --> VX
@@ -38,7 +54,7 @@ flowchart LR
   end
 ```
 
-The production bindings are declared in `wrangler.jsonc`:
+Production bindings (`wrangler.jsonc`):
 
 - `LAW_VAULT` → R2 bucket `law-vault`
 - `LAW_CORPUS` → 768-dimension cosine Vectorize index `law-corpus`
@@ -47,7 +63,7 @@ The production bindings are declared in `wrangler.jsonc`:
 
 ## Local setup
 
-Requirements: Bun 1.3+, a Cloudflare account for remote features, and optionally an OpenRouter key.
+Requirements: **Bun 1.3+**, a Cloudflare account for remote features, and optionally an OpenRouter key.
 
 ```bash
 bun install
@@ -56,11 +72,23 @@ cp .dev.vars.example .dev.vars
 bun dev
 ```
 
-The checked-in fixture corpus powers document browsing, semantic-like local search, chat, and deposition issue cards when bindings or secrets are unavailable.
+Open [http://localhost:3000](http://localhost:3000). The app lands on the **written-law overview**. Click the red **Singapore law** node anytime to return there.
+
+Checked-in fixtures plus the bundled written-law corpus power browsing, search, chat, and deposition analysis when cloud bindings are unavailable.
+
+## Tweaking the model prompt
+
+1. Open **Ask the atlas** (⌘J / chat dock).
+2. Click the **gear** icon in the chat header.
+3. Edit the **Model system prompt** textarea.
+4. Changes persist in `localStorage` (`sla-rag-system-prompt`) and are sent as `systemPrompt` on each `/api/chat` request.
+5. **Reset** restores `DEFAULT_RAG_SYSTEM_PROMPT` from `src/lib/server/prompts.ts`.
+
+Default prompt behaviour: statute-first answers, paper-analysis framework (what it is / applicability / use / precedents), no invented authorities, citation brackets from sources only.
 
 ## Corpus pipeline
 
-Run a deterministic offline pass first:
+Offline deterministic pass:
 
 ```bash
 bun pipeline/scrape.ts --offline
@@ -71,7 +99,13 @@ bun pipeline/upload.ts --dry-run
 bun pipeline/embed.ts --dry-run
 ```
 
-Then use the resumable live workflow:
+Refresh the demo judgment list from cached SGCA/SGHC raw files:
+
+```bash
+bun pipeline/build-demo-corpus.ts
+```
+
+Live workflow:
 
 ```bash
 bun pipeline/scrape.ts --pilot --delay-ms 1500
@@ -83,15 +117,17 @@ bun pipeline/upload.ts --bucket law-vault
 bun pipeline/embed.ts --index law-corpus --dimensions 768
 ```
 
-See [`pipeline/README.md`](pipeline/README.md) for credentials, rate-limit behavior, cache/resume semantics, and safe dry runs.
+Details: [`pipeline/README.md`](pipeline/README.md).
 
-## API surface
+## API
 
-- `GET /api/index/graph|tree`
-- `GET /api/doc/:id`
-- `POST /api/search` with `{ "query": "...", "topK": 8 }`
-- `POST /api/chat` with `{ "messages": [{ "role": "user", "content": "..." }] }`, returning citation metadata and streamed SSE deltas
-- `POST /api/deposition` with `{ "text": "...", "filename": "..." }`
+| Method | Path | Body / notes |
+| --- | --- | --- |
+| `GET` | `/api/index/graph` \| `tree` | Graph or folder index |
+| `GET` | `/api/doc/:id` | Markdown document (statutes include full digests) |
+| `POST` | `/api/search` | `{ "query", "topK?" }` |
+| `POST` | `/api/chat` | `{ "messages", "systemPrompt?", "topK?" }` — SSE stream + citations |
+| `POST` | `/api/deposition` | `{ "text", "filename?" }` |
 
 ## Verification
 
@@ -100,13 +136,9 @@ bun test
 bun run lint
 bun run typecheck
 bun run build
-bunx opennextjs-cloudflare build
-bun run preview
 ```
 
-## Cloudflare deployment
-
-The resources can be created idempotently with Wrangler:
+## Deploy (Cloudflare)
 
 ```bash
 bunx wrangler r2 bucket create law-vault
@@ -115,12 +147,29 @@ bunx wrangler secret put OPENROUTER_API_KEY
 bun run deploy
 ```
 
-The ingestion and query paths both enforce a 768-dimension contract, falling back from `@cf/baai/bge-m3` to `@cf/baai/bge-base-en-v1.5` when required.
+## Demo path (release)
 
-## Demo flow
+1. Land on **Singapore written law — overview of codes and principal Acts**.
+2. Click the red **Singapore law** hub (or Legislation) to re-open that overview.
+3. Open **Penal Code 1871** or **Civil Law Act 1909** from the statute map.
+4. Follow a related judgment (e.g. Spandeck) and inspect backlinks.
+5. Open Atlas counsel → gear → inspect/tweak the system prompt → ask a duty-of-care or s 112 question.
+6. Run Deposition Analysis on a sample PDF and jump back into a flagged authority.
 
-1. Open the default graph and focus the Negligence cluster.
-2. Open the topic overview, then the Spandeck judgment.
-3. Inspect backlinks and related precedents.
-4. Ask when a duty of care arises in Singapore.
-5. Open Deposition Analysis, upload a sample, and follow a flagged precedent back into the atlas.
+## Project layout (high signal)
+
+```
+src/
+  components/atlas/     # Graph, reader, chat (prompt editor), deposition
+  components/atlas/lib/
+    singapore-statutes.ts   # Written-law corpus + overview
+    demo-corpus.ts          # Curated judgments + merge
+    guide-docs.ts           # Root/domain click → document mapping
+  lib/server/prompts.ts     # DEFAULT_RAG_SYSTEM_PROMPT (editable in UI)
+  fixtures/                 # Offline graph/tree + recent judgments
+pipeline/                   # Scrape → enrich → index → R2 / Vectorize
+```
+
+## Licence & disclaimer
+
+Hackathon / research software. No warranty. Not a substitute for qualified Singapore legal advice.

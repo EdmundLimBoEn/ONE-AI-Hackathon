@@ -1,7 +1,8 @@
 {
-  "name": "one-ai-hackathon",
-  "version": "0.1.0",
+  "name": "singapore-law-atlas",
+  "version": "0.2.0",
   "private": true,
+  "description": "Singapore Law Atlas — graph-first research workspace for Singapore written law and case law",
   "scripts": {
     "build": "next build",
     "dev": "next dev",

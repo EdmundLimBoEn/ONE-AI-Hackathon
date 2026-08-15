@@ -1,11 +1,18 @@
 import graphFixture from "@/fixtures/graph.json";
 import treeFixture from "@/fixtures/tree.json";
+import {
+  buildDocumentMarkdown,
+  ensureCompleteSummary,
+  finalizeDocumentMarkdown,
+} from "@/lib/document-brief";
+import { DEMO_DOCS } from "@/components/atlas/lib/demo-corpus";
 import type { GraphData, TreeNode } from "@/lib/types";
 import type { LawAtlasEnv } from "@/lib/cloudflare";
 import { withTimeout } from "./errors";
 
 const graph = graphFixture as unknown as GraphData;
 const tree = treeFixture as unknown as TreeNode;
+const demoById = new Map(DEMO_DOCS.map((doc) => [doc.id, doc]));
 
 export type IndexKind = "graph" | "tree";
 
@@ -20,40 +27,45 @@ export async function getIndex(env: LawAtlasEnv | null, kind: IndexKind): Promis
 }
 
 function fixtureMarkdown(id: string): string | null {
-  const node = graph.nodes.find((candidate) => candidate.id === id);
+  const demo = demoById.get(id);
+  if (demo?.content) {
+    const meta = { ...demo, summary: ensureCompleteSummary(demo) };
+    return finalizeDocumentMarkdown(demo.content, meta);
+  }
+
+  const node = graph.nodes.find((candidate) => candidate.id === id) ?? demo;
   if (!node) return null;
-  const related = node.relatedIds.length
-    ? node.relatedIds.map((relatedId) => `- [[${relatedId}]]`).join("\n")
-    : "- No related precedents in the local fixture.";
-  return `---
-id: ${node.id}
-title: ${JSON.stringify(node.title)}
-citation: ${JSON.stringify(node.citation)}
-court: ${node.court}
-year: ${node.year}
-categoryPath: ${JSON.stringify(node.categoryPath)}
-tags: ${JSON.stringify(node.tags)}
----
-
-# ${node.title}
-
-${node.citation}
-
-## Summary
-
-${node.summary}
-
-## Related precedents
-
-${related}
-`;
+  const meta = { ...node, summary: ensureCompleteSummary(node) };
+  const relatedTitles = new Map(
+    meta.relatedIds
+      .map((relatedId) => {
+        const related =
+          graph.nodes.find((candidate) => candidate.id === relatedId) ??
+          demoById.get(relatedId);
+        return related ? ([relatedId, related.title] as const) : null;
+      })
+      .filter((entry): entry is readonly [string, string] => entry !== null),
+  );
+  return buildDocumentMarkdown(meta, {
+    relatedIds: meta.relatedIds,
+    relatedTitles,
+    body: demo && "content" in demo ? demo.content : undefined,
+  });
 }
 
 export async function getDocument(env: LawAtlasEnv | null, id: string): Promise<string | null> {
   if (env?.LAW_VAULT) {
     for (const key of [`docs/${id}.md`, `vault/${id}.md`, `documents/${id}.md`, `${id}.md`]) {
       const object = await withTimeout(env.LAW_VAULT.get(key), 8_000, "Document store");
-      if (object) return object.text();
+      if (object) {
+        const text = await object.text();
+        const node = graph.nodes.find((candidate) => candidate.id === id);
+        if (!node) return text;
+        return finalizeDocumentMarkdown(text, {
+          ...node,
+          summary: ensureCompleteSummary(node),
+        });
+      }
     }
   }
   return fixtureMarkdown(id);

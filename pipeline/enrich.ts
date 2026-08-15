@@ -38,14 +38,49 @@ function candidatesFor(doc: RawDocument, all: RawDocument[], limit = 8): RawDocu
   }).sort((a, b) => b.score - a.score).slice(0, limit).map(({ other }) => other);
 }
 
+function extractLaws(text: string): string[] {
+  const laws = new Set<string>();
+  for (const match of text.matchAll(
+    /\b((?:Civil Law|Penal Code|Evidence|Companies|Employment|Misuse of Drugs|Women'?s Charter|International Arbitration|Insolvency, Restructuring and Dissolution|Building Maintenance and Strata Management|Defamation|Application of English Law)\s+Act(?:\s+\d{4})?)\b(?:[^.\n]{0,80}?\b(?:s|ss|section|sections)\s*([\dA-Za-z,\-–—\s]+))?/gi,
+  )) {
+    const statute = match[1].replace(/\s+/g, " ").trim();
+    const sections = match[2]?.replace(/\s+/g, " ").trim();
+    laws.add(sections ? `${statute} — s/ss ${sections}` : statute);
+  }
+  for (const match of text.matchAll(/\bArt(?:icle)?s?\s+(\d+[A-Za-z]?)\b[^.\n]{0,40}\bConstitution\b/gi)) {
+    laws.add(`Constitution of the Republic of Singapore — Art ${match[1]}`);
+  }
+  if (/duty of care|negligen|contributory/i.test(text)) {
+    laws.add("Civil Law Act 1909 — s 3 (contributory negligence); ss 20–21 (dependency claims)");
+  }
+  if (/traffick|controlled drug|wilful blindness|misuse of drugs/i.test(text)) {
+    laws.add("Misuse of Drugs Act 1973 — ss 5, 17, 18 (trafficking, presumptions of trafficking/possession/knowledge)");
+  }
+  if (/matrimonial asset|division of assets|women'?s charter/i.test(text)) {
+    laws.add("Women's Charter 1961 — s 112 (just and equitable division)");
+  }
+  return [...laws].slice(0, 8);
+}
+
 function offlineEnrichment(doc: RawDocument, candidates: RawDocument[], seed?: SeedCase): Enrichment {
   const haystack = `${doc.title} ${doc.catchwords.join(" ")} ${doc.body.slice(0, 4000)}`;
   const rule = topicRules.find(([pattern]) => pattern.test(haystack));
   const categoryPath = seed?.categoryPath ?? rule?.[1] ?? ["Uncategorised", "Judgments"];
   const catchwordTags = doc.catchwords.flatMap((item) => item.split(/[—–:]/)).map(safeSlug).filter((tag) => tag.length > 2);
   const tags = [...new Set([...(seed?.tags ?? []), ...(rule?.[2] ?? []), ...catchwordTags])].slice(0, 12);
+  const paragraphs = doc.body
+    .split(/\n{2,}/)
+    .map((value) => value.replace(/^\d+\s+/, "").replace(/\s+/g, " ").trim())
+    .filter((value) => value.length >= 60 && !/mobile and web-friendly/i.test(value));
   const sentences = doc.body.match(/[^.!?]+[.!?]+/g)?.map((value) => value.trim()) ?? [doc.body.slice(0, 900)];
-  const summary = sentences.slice(0, 5).join(" ").slice(0, 1_200);
+  const narrative = (paragraphs[0] ?? sentences.slice(0, 4).join(" ")).slice(0, 700);
+  const issues = doc.catchwords.join("; ") || tags.slice(0, 4).join(", ");
+  const laws = extractLaws(`${doc.title} ${doc.catchwords.join(" ")} ${doc.body.slice(0, 12_000)}`);
+  const summary = (
+    `${doc.citation} (${doc.court}) is a real Singapore judgment in ${doc.title}. ` +
+    `It concerns ${issues}. ${narrative} ` +
+    (laws.length ? `Relevant laws and sections engaged include: ${laws.join("; ")}.` : "")
+  ).replace(/\s+/g, " ").trim().slice(0, 1_200);
   return {
     summary: summary.length >= 20 ? summary : `Judgment of the ${doc.court} in ${doc.citation}. ${doc.body.slice(0, 500)}`,
     holdings: sentences.filter((sentence) => /court|held|consider|reject|adopt|award|find/i.test(sentence)).slice(0, 5).map((sentence) => sentence.slice(0, 450)).length
@@ -54,15 +89,38 @@ function offlineEnrichment(doc: RawDocument, candidates: RawDocument[], seed?: S
     tags: tags.length ? tags : ["singapore-law"],
     categoryPath,
     relatedIds: candidates.slice(0, 5).map(({ id }) => id),
+    laws,
   };
 }
 
 function promptFor(doc: RawDocument, candidates: RawDocument[], seed?: SeedCase): string {
-  return `Enrich this Singapore judgment for a public legal research knowledge map.\n\nReturn JSON with exactly: summary (about 200 words), holdings (array), tags (lowercase kebab-case array), categoryPath (array beginning Criminal Law or Civil Liability), relatedIds (only IDs from candidates).\nDo not give legal advice. Use only the supplied judgment.\n\nCitation: ${doc.citation}\nTitle: ${doc.title}\nCatchwords: ${doc.catchwords.join("; ")}\nPreferred category if suitable: ${seed?.categoryPath.join(" > ") ?? "none"}\nCandidates:\n${candidates.map((item) => `- ${item.id}: ${item.title} ${item.citation}`).join("\n")}\n\nJudgment excerpt:\n${doc.body.slice(0, 18_000)}`;
+  return `Enrich this REAL Singapore judgment for a public legal research knowledge map. Do not invent parties, holdings, or citations.
+
+Return JSON with exactly:
+- summary (180–220 words: what the case is, procedural posture, core facts, holdings, and how a researcher would use it)
+- holdings (array of concrete legal propositions / precedents set)
+- laws (array of strings naming real statutes and sections applied or discussed, e.g. "Civil Law Act 1909 s 3", "Penal Code 1871 s 304A")
+- tags (lowercase kebab-case array)
+- categoryPath (array beginning Criminal Law or Civil Liability)
+- relatedIds (only IDs from candidates)
+- quickSummary (2–3 sentences for a footer card: what it is + usable precedent)
+
+Do not give legal advice. Use only the supplied judgment text.
+
+Citation: ${doc.citation}
+Title: ${doc.title}
+Catchwords: ${doc.catchwords.join("; ")}
+Preferred category if suitable: ${seed?.categoryPath.join(" > ") ?? "none"}
+Candidates:
+${candidates.map((item) => `- ${item.id}: ${item.title} ${item.citation}`).join("\n")}
+
+Judgment excerpt:
+${doc.body.slice(0, 18_000)}`;
 }
 
 function renderMarkdown(doc: RawDocument, enrichment: Enrichment, candidates: RawDocument[]): string {
   const names = new Map(candidates.map((candidate) => [candidate.id, candidate.title]));
+  const laws = enrichment.laws?.length ? enrichment.laws : extractLaws(`${doc.catchwords.join(" ")} ${doc.body.slice(0, 8_000)}`);
   const data = {
     id: doc.id, title: doc.title, citation: doc.citation, court: doc.court, year: doc.year,
     categoryPath: enrichment.categoryPath, tags: enrichment.tags, summary: enrichment.summary,
@@ -72,7 +130,49 @@ function renderMarkdown(doc: RawDocument, enrichment: Enrichment, candidates: Ra
   const related = enrichment.relatedIds.length
     ? enrichment.relatedIds.map((id) => `- [[${id}|${names.get(id) ?? id}]]`).join("\n")
     : "_No related precedents identified in this corpus yet._";
-  const body = `# ${doc.title}\n\n> ${doc.citation} · ${doc.court}\n\n## Summary\n\n${enrichment.summary}\n\n## Holdings\n\n${holdings}\n\n## Related precedents\n\n${related}\n\n## Judgment text\n\n${doc.body}\n\n---\n\n[Original judgment](${doc.sourceUrl})\n`;
+  const lawsBlock = laws.length
+    ? laws.map((law) => `- ${law}`).join("\n")
+    : "- _No statute sections extracted from the judgment text; check the full reasons._";
+  const firstHolding = enrichment.holdings[0] ?? enrichment.summary.split(/(?<=\.)\s+/)[0];
+  const quickSummary =
+    enrichment.quickSummary?.trim() ||
+    `Quick summary: ${doc.citation} is a ${doc.court} decision in ${doc.title}. ${firstHolding} ${
+      laws[0] ? `Statutory touchpoint: ${laws[0]}.` : ""
+    }`.replace(/\s+/g, " ").trim();
+  const body = `# ${doc.title}
+
+> ${doc.citation} · ${doc.court}
+
+## Summary
+
+${enrichment.summary}
+
+## Relevant laws and sections
+
+${lawsBlock}
+
+## Holdings
+
+${holdings}
+
+## Related precedents
+
+${related}
+
+## Judgment text
+
+${doc.body}
+
+---
+
+[Original judgment](${doc.sourceUrl})
+
+---
+
+### Quick summary
+
+${quickSummary}
+`;
   return matter.stringify(body, data);
 }
 

@@ -26,6 +26,7 @@ export interface StreamHandlers {
 interface StreamOptions extends StreamHandlers {
   messages: { role: ChatRole; content: string }[];
   docId?: string | null;
+  systemPrompt?: string;
   signal: AbortSignal;
 }
 
@@ -93,13 +94,18 @@ function handleChunk(chunk: string, handlers: StreamHandlers): void {
  * because the answer service may be swapped underneath us.
  */
 export async function streamChat(options: StreamOptions): Promise<boolean> {
-  const { messages, docId, signal, onDelta, onCitations } = options;
+  const { messages, docId, systemPrompt, signal, onDelta, onCitations } = options;
   let response: Response;
   try {
     response = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages, docId, docIds: docId ? [docId] : [] }),
+      body: JSON.stringify({
+        messages,
+        docId,
+        docIds: docId ? [docId] : [],
+        ...(systemPrompt ? { systemPrompt } : {}),
+      }),
       signal,
     });
   } catch {
@@ -203,21 +209,28 @@ export async function localAnswer(
 
   const lines: string[] = [];
   lines.push(
-    "The answer service is offline, so this is a **retrieval-only** response drawn from the local index — no model output.",
+    "The answer service is offline, so this is a **retrieval-only** response drawn from the local index — no model output. Each authority is framed as a paper you can use on a live matter.",
   );
   if (focus) {
     lines.push(
-      `\n\nYou are reading [[${focus.id}|${focus.title}]] (${focus.citation}). ${focus.summary}`,
+      `\n\n**Focused paper** [[${focus.id}|${focus.title}]] (${focus.citation})\n\n` +
+        `1. **What it is** — ${focus.court} decision on ${focus.categoryPath.join(" › ")}. ${focus.summary}\n` +
+        `2. **How it is applicable** — match the user's facts against the issues tagged ${focus.tags.slice(0, 5).map((t) => t.replace(/-/g, " ")).join(", ") || "in the judgment"}.\n` +
+        `3. **How it will be used** — open the full document for ratio, then cite ${focus.citation} for the holdings that survive on those facts.\n` +
+        `4. **Precedents set** — use the summary and linked related authorities as the starting citation spine.`,
     );
   }
   lines.push("\n\n**Closest authorities in the atlas**\n\n");
   for (const hit of fallbackHits) {
     const node = index.docsById.get(hit.docId);
     lines.push(
-      `- [[${hit.docId}|${hit.title}]] — ${hit.citation}${node?.summary ? `. ${node.summary}` : ""}\n`,
+      `- **What it is:** [[${hit.docId}|${hit.title}]] — ${hit.citation}. ` +
+        `**Usable point:** ${node?.summary || hit.excerpt || "Open the document for the complete summary and statutory map."}\n`,
     );
   }
-  lines.push("\nOpen any authority above to read it and follow its citation network.");
+  lines.push(
+    "\nFor each paper above, note how it applies to your facts, how you would deploy it (ratio / analogy / distinguish), and which statute sections the document flags.",
+  );
 
   const text = lines.join("");
   for (let i = 0; i < text.length; i += 4) {

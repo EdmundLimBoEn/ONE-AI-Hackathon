@@ -25,6 +25,7 @@ import {
   type LayeredLink,
   type LayeredNode,
 } from "./lib/graph-layout";
+import { entryDocForGuide } from "./lib/guide-docs";
 import { IconButton } from "@/components/ui/primitives";
 import { cn } from "@/components/ui/cn";
 
@@ -473,7 +474,17 @@ export function GraphView({
         case " ":
           if (focusedId) {
             event.preventDefault();
-            onSelect(focusedId);
+            const focused = orderedNodes.find((node) => node.id === focusedId);
+            if (!focused) break;
+            if (focused.role === "document") {
+              onSelect(focused.id);
+            } else {
+              const entry = entryDocForGuide(focused.role, focused.domain, focused.category);
+              if (entry) onSelect(entry);
+              else if (focused.role === "topic" || focused.role === "subtopic") {
+                onFocusCategory(focused.category);
+              }
+            }
           }
           break;
         case "Escape":
@@ -628,14 +639,29 @@ export function GraphView({
             }}
             onNodeClick={(node) => {
               setFocusedId(node.id);
-              if (node.role === "document") onSelect(node.id);
-              else if (node.role === "root") {
-                onFocusCategory(null);
-                frameNodes(visibleData.nodes);
-              } else if (node.role === "domain") {
-                onFocusCategory(null);
-                frameNodes(visibleData.nodes.filter((candidate) => candidate.domain === node.domain));
-              } else onFocusCategory(node.category);
+              if (node.role === "document") {
+                onSelect(node.id);
+                return;
+              }
+              const entryId = entryDocForGuide(node.role, node.domain, node.category);
+              if (entryId) {
+                onSelect(entryId);
+                if (node.role === "root") {
+                  onFocusCategory(null);
+                  frameNodes(visibleData.nodes);
+                } else if (node.role === "domain") {
+                  onFocusCategory(null);
+                  frameNodes(
+                    visibleData.nodes.filter((candidate) => candidate.domain === node.domain),
+                  );
+                } else {
+                  onFocusCategory(node.category);
+                }
+                return;
+              }
+              if (node.role === "topic" || node.role === "subtopic") {
+                onFocusCategory(node.category);
+              }
             }}
             onNodeDrag={(node) => {
               if (node.x !== undefined) node.fx = node.x;
@@ -705,7 +731,13 @@ export function GraphView({
             <button
               type="button"
               onFocus={() => focusNode(node.id)}
-              onClick={() => onSelect(node.id)}
+              onClick={() => {
+                if (node.role === "document") onSelect(node.id);
+                else {
+                  const entry = entryDocForGuide(node.role, node.domain, node.category);
+                  if (entry) onSelect(entry);
+                }
+              }}
             >
               {node.title}, {node.citation}, {courtLabel(node.court)}, {node.degree} connections
             </button>
@@ -750,7 +782,12 @@ function GraphTooltip({
         <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-muted">{node.summary}</p>
       ) : null}
       <p className="mt-2 text-[10px] text-faint">
-        {node.degree} connection{node.degree === 1 ? "" : "s"} · {node.kind === "overview" ? "click to focus" : "click to open"}
+        {node.degree} connection{node.degree === 1 ? "" : "s"} ·{" "}
+        {node.id === "root:singapore-law" || node.categoryPath[0] === "Legislation" || node.kind === "overview"
+          ? "click to open written-law overview"
+          : node.kind === "statute"
+            ? "click to open statute"
+            : "click to open"}
       </p>
     </div>
   );

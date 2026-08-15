@@ -18,6 +18,8 @@ export type RawDocument = z.infer<typeof rawDocumentSchema>;
 export const enrichmentSchema = z.object({
   summary: z.string().min(20),
   holdings: z.array(z.string().min(3)).min(1).max(8),
+  laws: z.array(z.string().min(3)).max(12).optional().default([]),
+  quickSummary: z.string().min(20).max(600).optional(),
   tags: z.array(z.string().min(2)).min(1).max(15),
   categoryPath: z.array(z.string().min(1)).min(2).max(5),
   relatedIds: z.array(z.string()).max(12).default([]),

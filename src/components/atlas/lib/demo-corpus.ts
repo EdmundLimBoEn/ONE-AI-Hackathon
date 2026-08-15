@@ -1,5 +1,6 @@
 import type { DocMeta } from "@/lib/types";
 import recentCorpus from "@/fixtures/recent-corpus.json";
+import { SINGAPORE_STATUTES } from "./singapore-statutes";
 
 /**
  * Offline demo corpus. Only used when neither the live index nor the checked-in
@@ -21,34 +22,43 @@ const CURATED_DEMO_DOCS: DemoDoc[] = [
     categoryPath: ["Civil Liability", "Negligence", "Duty of Care"],
     tags: ["negligence", "duty-of-care", "pure-economic-loss"],
     summary:
-      "Established Singapore's single two-stage test for a duty of care — proximity then policy — preceded by a threshold of factual foreseeability, departing from the English Caparo tripartite approach.",
+      "Real Court of Appeal decision establishing Singapore's single two-stage duty-of-care test (proximity then policy), preceded by factual foreseeability. Departs from the English Caparo tripartite approach. On the facts, no duty was owed inside a contractual matrix allocating pure economic loss. Pair with Civil Law Act 1909 s 3 when contributory negligence is live.",
     relatedIds: [
       "ngiam-kong-seng-2008",
       "anwar-patrick-adrian-2014",
       "see-toh-siew-kee-2013",
       "ng-huat-seng-2017",
+      "civil-law-act-1909",
+      "application-of-english-law-act-1993",
+      "workplace-safety-health-act-2006",
     ],
     sourceUrl: `${EL}2007_SGCA_37`,
     kind: "judgment",
-    content: `## Holding
+    content: `## What this paper is
 
-The Court of Appeal held that a **single test** determines the existence of a duty of care in negligence, regardless of the type of damage claimed. The court declined to follow the English tripartite test in *Caparo Industries plc v Dickman*, preferring an incremental approach grounded in local conditions.
+[2007] SGCA 37 is the leading Singapore Court of Appeal judgment on when a duty of care arises in negligence, including pure economic loss.
+
+## Relevant laws and sections
+
+- **Civil Law Act 1909 s 3** — contributory negligence / apportionment once duty and breach are made out.
+- **Civil Law Act 1909 ss 20–21** — dependency claims if the negligence claim is fatal.
+- Common-law negligence (received via the **Application of English Law Act 1993 s 3**), localised by this decision.
+
+## Holding / precedents set
+
+The Court of Appeal held that a **single test** determines the existence of a duty of care in negligence, regardless of the type of damage claimed. The court declined to follow the English tripartite test in *Caparo Industries plc v Dickman*.
 
 ## The two-stage test
 
-1. **Threshold — factual foreseeability.** Ought the defendant to have known that the claimant would suffer damage from his carelessness? This is a low bar and rarely disposes of a claim.
-2. **Stage one — legal proximity.** Physical, circumstantial and causal proximity, supported where relevant by the twin criteria of voluntary assumption of responsibility and reliance.
-3. **Stage two — policy.** Countervailing considerations such as indeterminate liability, the presence of a contractual matrix, or the risk of defensive practices.
+1. **Threshold — factual foreseeability.** Ought the defendant to have known that the claimant would suffer damage from his carelessness?
+2. **Stage one — legal proximity.** Physical, circumstantial and causal proximity; assumption of responsibility and reliance where relevant.
+3. **Stage two — policy.** Indeterminate liability, contractual matrix, defensive practices, and like considerations.
 
-> The entire framework is to be applied incrementally, with reference to decided cases in analogous situations.
+## How it is applicable / how it will be used
 
-## Application
+Use *Spandeck* whenever duty is contested in negligence (personal injury, psychiatric harm, pure economic loss, occupiers, professionals). Cite it for the framework; then distinguish or analogise on proximity and policy. On the facts, the **contractual matrix** defeated a pure economic loss duty owed by the superintending officer to the contractor.
 
-Because the parties operated within a **contractual matrix** that allocated risk, the court found no duty of care owed by the superintending officer to the contractor for economic loss. See [[ngiam-kong-seng-2008|Ngiam Kong Seng]] for the framework's application to psychiatric harm, and [[anwar-patrick-adrian-2014]] for its treatment of pure economic loss against solicitors.
-
-## Subsequent treatment
-
-The framework was affirmed and refined in [[see-toh-siew-kee-2013]], which abolished the occupiers' liability categories and folded them into ordinary negligence, and in [[ng-huat-seng-2017]] on non-delegable duties.`,
+See [[ngiam-kong-seng-2008|Ngiam Kong Seng]], [[anwar-patrick-adrian-2014]], [[see-toh-siew-kee-2013]], and [[ng-huat-seng-2017]] for later applications.`,
   },
   {
     id: "ngiam-kong-seng-2008",
@@ -239,7 +249,12 @@ Sembcorp also laid down procedural requirements for adducing extrinsic evidence:
     tags: ["criminal", "wilful-blindness", "possession", "misuse-of-drugs"],
     summary:
       "Clarified the doctrine of wilful blindness and the presumption of possession, holding that wilful blindness requires a clear, grounded suspicion and a deliberate refusal to inquire.",
-    relatedIds: ["hue-an-li-2014", "penal-code-1871"],
+    relatedIds: [
+      "misuse-of-drugs-act-1973",
+      "penal-code-1871",
+      "criminal-procedure-code-2010",
+      "evidence-act-1893",
+    ],
     sourceUrl: `${EL}2019_SGCA_38`,
     kind: "judgment",
   },
@@ -253,7 +268,12 @@ Sembcorp also laid down procedural requirements for adducing extrinsic evidence:
     tags: ["criminal", "sentencing", "rashness", "negligence", "mens-rea"],
     summary:
       "Distinguished rashness from negligence as states of mind and issued sentencing guidance for causing death by a negligent act, with prospective overruling.",
-    relatedIds: ["adili-chibuike-2019", "kho-jabing-2015", "penal-code-1871"],
+    relatedIds: [
+      "penal-code-1871",
+      "criminal-procedure-code-2010",
+      "adili-chibuike-2019",
+      "kho-jabing-2015",
+    ],
     sourceUrl: `${EL}2014_SGHC_171`,
     kind: "judgment",
   },
@@ -267,7 +287,7 @@ Sembcorp also laid down procedural requirements for adducing extrinsic evidence:
     tags: ["criminal", "sentencing", "murder", "capital-punishment"],
     summary:
       "Set out the approach to re-sentencing under the amended murder provisions, focusing on whether the offender acted in a way that outrages the feelings of the community.",
-    relatedIds: ["hue-an-li-2014", "penal-code-1871"],
+    relatedIds: ["penal-code-1871", "criminal-procedure-code-2010", "hue-an-li-2014"],
     sourceUrl: `${EL}2015_SGCA_1`,
     kind: "judgment",
   },
@@ -332,7 +352,7 @@ Sembcorp also laid down procedural requirements for adducing extrinsic evidence:
     tags: ["family", "division-of-assets", "structured-approach", "contributions"],
     summary:
       "Introduced the structured approach to dividing matrimonial assets, giving weight to direct and indirect contributions through an averaged ratio.",
-    relatedIds: ["tnl-v-tnk-2017", "uda-v-udb-2018", "womens-charter-1961"],
+    relatedIds: ["womens-charter-1961", "tnl-v-tnk-2017", "uda-v-udb-2018"],
     sourceUrl: `${EL}2015_SGCA_34`,
     kind: "judgment",
   },
@@ -346,7 +366,7 @@ Sembcorp also laid down procedural requirements for adducing extrinsic evidence:
     tags: ["family", "division-of-assets", "long-marriage", "single-income"],
     summary:
       "Held that the ANJ structured approach does not apply to long single-income marriages, where an equal division is the appropriate starting point.",
-    relatedIds: ["anj-v-ans-2015", "uda-v-udb-2018", "womens-charter-1961"],
+    relatedIds: ["womens-charter-1961", "anj-v-ans-2015", "uda-v-udb-2018"],
     sourceUrl: `${EL}2017_SGCA_15`,
     kind: "judgment",
   },
@@ -360,22 +380,22 @@ Sembcorp also laid down procedural requirements for adducing extrinsic evidence:
     tags: ["family", "third-parties", "procedure", "division-of-assets"],
     summary:
       "Addressed how the family court should deal with assets in which third parties assert a proprietary interest.",
-    relatedIds: ["anj-v-ans-2015", "tnl-v-tnk-2017"],
+    relatedIds: ["womens-charter-1961", "anj-v-ans-2015", "tnl-v-tnk-2017"],
     sourceUrl: `${EL}2018_SGCA_30`,
     kind: "judgment",
   },
   {
     id: "sit-kwong-lam-2018",
     title: "Sit Kwong Lam v Management Corporation Strata Title Plan No 2645",
-    citation: "[2018] SGCA 47",
+    citation: "[2018] SGCA 14",
     court: "SGCA",
     year: 2018,
     categoryPath: ["Property Law", "Strata Title", "Common Property"],
     tags: ["property", "strata", "common-property", "by-laws"],
     summary:
-      "Clarified the meaning of common property under the Building Maintenance and Strata Management Act and the limits of a management corporation's powers.",
-    relatedIds: ["mano-vikrant-singh-2012"],
-    sourceUrl: `${EL}2018_SGCA_47`,
+      "Real Court of Appeal decision clarifying the meaning of common property under the Building Maintenance and Strata Management Act 2004 (including s 2) and the limits of a management corporation's powers over exterior and common areas.",
+    relatedIds: ["bmsma-2004", "land-titles-act-1993"],
+    sourceUrl: `${EL}2018_SGCA_14`,
     kind: "judgment",
   },
   {
@@ -388,7 +408,11 @@ Sembcorp also laid down procedural requirements for adducing extrinsic evidence:
     tags: ["employment", "restraint-of-trade", "non-compete", "deferred-benefits"],
     summary:
       "Held that a forfeiture-for-competition clause in a deferred incentive plan was subject to, and failed, the restraint of trade doctrine.",
-    relatedIds: ["lek-gwee-noi-2014", "employment-act-1968"],
+    relatedIds: [
+      "employment-act-1968",
+      "application-of-english-law-act-1993",
+      "lek-gwee-noi-2014",
+    ],
     sourceUrl: `${EL}2012_SGCA_42`,
     kind: "judgment",
   },
@@ -402,85 +426,19 @@ Sembcorp also laid down procedural requirements for adducing extrinsic evidence:
     tags: ["employment", "restraint-of-trade", "non-compete", "severance"],
     summary:
       "Reviewed the legitimate proprietary interest requirement and the limits of severance for overly wide restrictive covenants.",
-    relatedIds: ["mano-vikrant-singh-2012", "employment-act-1968"],
+    relatedIds: ["employment-act-1968", "mano-vikrant-singh-2012"],
     sourceUrl: `${EL}2014_SGHC_64`,
     kind: "judgment",
   },
-  {
-    id: "penal-code-1871",
-    title: "Penal Code 1871",
-    citation: "Cap 224, 2020 Rev Ed",
-    court: "Parliament",
-    year: 1871,
-    categoryPath: ["Statutes", "Criminal Law"],
-    tags: ["statute", "criminal", "mens-rea", "offences"],
-    summary:
-      "The principal criminal statute of Singapore, defining general exceptions, states of mind, and the substantive offences including homicide and hurt.",
-    relatedIds: ["adili-chibuike-2019", "hue-an-li-2014", "kho-jabing-2015"],
-    sourceUrl: "https://sso.agc.gov.sg/Act/PC1871",
-    kind: "statute",
-  },
-  {
-    id: "civil-law-act-1909",
-    title: "Civil Law Act 1909",
-    citation: "Cap 43, 2020 Rev Ed",
-    court: "Parliament",
-    year: 1909,
-    categoryPath: ["Statutes", "Civil Liability"],
-    tags: ["statute", "damages", "dependency-claims", "contributory-negligence"],
-    summary:
-      "Governs survival of causes of action, dependency claims, and the apportionment of liability for contributory negligence.",
-    relatedIds: ["tv-media-v-de-cruz-2004", "spandeck-v-dsta-2007"],
-    sourceUrl: "https://sso.agc.gov.sg/Act/CLA1909",
-    kind: "statute",
-  },
-  {
-    id: "womens-charter-1961",
-    title: "Women's Charter 1961",
-    citation: "Cap 353, 2020 Rev Ed",
-    court: "Parliament",
-    year: 1961,
-    categoryPath: ["Statutes", "Family Law"],
-    tags: ["statute", "family", "division-of-assets", "maintenance"],
-    summary:
-      "The principal family statute, including s 112 on the just and equitable division of matrimonial assets.",
-    relatedIds: ["anj-v-ans-2015", "tnl-v-tnk-2017", "uda-v-udb-2018"],
-    sourceUrl: "https://sso.agc.gov.sg/Act/WC1961",
-    kind: "statute",
-  },
-  {
-    id: "employment-act-1968",
-    title: "Employment Act 1968",
-    citation: "Cap 91, 2020 Rev Ed",
-    court: "Parliament",
-    year: 1968,
-    categoryPath: ["Statutes", "Employment Law"],
-    tags: ["statute", "employment", "termination", "salary"],
-    summary:
-      "Sets the statutory floor for terms of employment, notice, salary payment and dismissal for employees within its scope.",
-    relatedIds: ["mano-vikrant-singh-2012", "lek-gwee-noi-2014"],
-    sourceUrl: "https://sso.agc.gov.sg/Act/EmA1968",
-    kind: "statute",
-  },
-  {
-    id: "constitution-sg",
-    title: "Constitution of the Republic of Singapore",
-    citation: "1985 Rev Ed, 1999 Reprint",
-    court: "Parliament",
-    year: 1965,
-    categoryPath: ["Statutes", "Constitutional & Administrative Law"],
-    tags: ["statute", "constitutional", "fundamental-liberties", "article-12"],
-    summary:
-      "The supreme law of Singapore, including Part 4 on fundamental liberties and Art 12 on equal protection.",
-    relatedIds: ["lim-meng-suang-2014", "tan-seng-kee-2022", "chng-suan-tze-1988"],
-    sourceUrl: "https://sso.agc.gov.sg/Act/CONS1963",
-    kind: "statute",
-  },
 ];
 
-const curatedCitations = new Set(CURATED_DEMO_DOCS.map((doc) => doc.citation));
+const curatedCitations = new Set(
+  [...CURATED_DEMO_DOCS, ...SINGAPORE_STATUTES].map((doc) => doc.citation),
+);
 
+/** Curated judgments + full written-law corpus, then recent eLitigation judgments. */
 export const DEMO_DOCS: DemoDoc[] = [
+  ...SINGAPORE_STATUTES,
   ...CURATED_DEMO_DOCS,
   ...(recentCorpus as DemoDoc[]).filter((doc) => !curatedCitations.has(doc.citation)),
 ];

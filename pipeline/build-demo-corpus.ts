@@ -22,13 +22,14 @@ const DEMO_SOURCE = path.join(ROOT, "src/components/atlas/lib/demo-corpus.ts");
 const OUTPUT = path.join(ROOT, "src/fixtures/recent-corpus.json");
 
 const CATEGORY_ANCHORS: Record<string, string> = {
-  "Civil Liability": "spandeck-v-dsta-2007",
-  "Commercial Law": "sembcorp-marine-2013",
+  "Civil Liability": "civil-law-act-1909",
+  "Commercial Law": "companies-act-1967",
   "Criminal Law": "penal-code-1871",
   "Family Law": "womens-charter-1961",
   "Employment Law": "employment-act-1968",
   "Constitutional & Administrative Law": "constitution-sg",
-  "Property Law": "sit-kwong-lam-2018",
+  "Property Law": "bmsma-2004",
+  Statutes: "overview-singapore-written-law",
 };
 
 function cleanTitle(title: string): string {
@@ -79,14 +80,61 @@ function tagsFor(doc: RawDocument, category: string): string[] {
   return [...new Set([slug(category), ...phrases])].slice(0, 10);
 }
 
+function lawsHint(doc: RawDocument): string {
+  const text = `${doc.title} ${doc.catchwords.join(" ")} ${doc.body.slice(0, 6_000)}`.toLowerCase();
+  const hits: string[] = [];
+  if (/negligen|duty of care|personal injur|tort|contributory/.test(text)) {
+    hits.push("Civil Law Act 1909 s 3 / ss 20–21");
+  }
+  if (/drug|traffick|wilful blindness|misuse of drugs/.test(text)) {
+    hits.push("Misuse of Drugs Act 1973 ss 5, 17, 18");
+  }
+  if (/penal|murder|hurt|cheating|rash|s 304a/.test(text)) {
+    hits.push("Penal Code 1871 (fault elements / offence provisions engaged)");
+  }
+  if (/contract|implied term|interpretation|parol|penalty/.test(text)) {
+    hits.push("Evidence Act 1893 ss 94–100");
+  }
+  if (/matrimonial|divorce|maintenance|family law/.test(text)) {
+    hits.push("Women's Charter 1961 s 112");
+  }
+  if (/director|oppression|shareholder|companies act/.test(text)) {
+    hits.push("Companies Act 1967 ss 157, 216");
+  }
+  if (/arbitration|setting aside/.test(text)) {
+    hits.push("International Arbitration Act 1994 s 24 / Model Law Art 34");
+  }
+  if (/winding up|insolvency|liquidat/.test(text)) {
+    hits.push("Insolvency, Restructuring and Dissolution Act 2018");
+  }
+  if (/constitutional|judicial review|article 12/.test(text)) {
+    hits.push("Constitution Arts 9, 12, 93");
+  }
+  return hits.slice(0, 3).join("; ");
+}
+
 function summaryFor(doc: RawDocument): string {
   const catchwords = normalizedCatchwords(doc);
-  if (catchwords) return `Judgment concerning ${catchwords.slice(0, 280)}.`;
   const paragraph = doc.body
     .split(/\n{2,}/)
-    .map((value) => value.replace(/^\d+\s+/, "").trim())
-    .find((value) => value.length >= 80);
-  return (paragraph ?? `Singapore judgment ${doc.citation}.`).slice(0, 320);
+    .map((value) => value.replace(/^\d+\s+/, "").replace(/\s+/g, " ").trim())
+    .find(
+      (value) =>
+        value.length >= 100 &&
+        !/mobile and web-friendly/i.test(value) &&
+        !/^introduction$/i.test(value),
+    );
+  const narrative = (paragraph ?? doc.body.replace(/\s+/g, " ").trim()).slice(0, 420);
+  const laws = lawsHint(doc);
+  const issueLine = catchwords || "the issues framed on appeal";
+  return (
+    `${doc.citation} (${doc.court}) is a real Singapore judgment in ${cleanTitle(doc.title)}. ` +
+    `It addresses ${issueLine}. ${narrative}` +
+    (laws ? ` Relevant laws/sections: ${laws}.` : "")
+  )
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 700);
 }
 
 function citationsIn(body: string): string[] {

@@ -17,6 +17,11 @@ import { categoryColor, categoryOf, courtLabel } from "./lib/categories";
 import { MarkdownView } from "./markdown-view";
 import { Chip, Spinner } from "@/components/ui/primitives";
 import { cn } from "@/components/ui/cn";
+import {
+  ensureCompleteSummary,
+  quickSummaryFor,
+  relevantLawsFor,
+} from "@/lib/document-brief";
 
 export function DocReader({
   doc,
@@ -54,6 +59,16 @@ export function DocReader({
     () => (doc ? categoryOf(doc.meta.categoryPath) : ""),
     [doc],
   );
+
+  const completeSummary = useMemo(
+    () => (doc ? ensureCompleteSummary(doc.meta) : ""),
+    [doc],
+  );
+  const footerSummary = useMemo(
+    () => (doc ? quickSummaryFor(doc.meta, completeSummary) : ""),
+    [doc, completeSummary],
+  );
+  const laws = useMemo(() => (doc ? relevantLawsFor(doc.meta) : []), [doc]);
 
   return (
     <section
@@ -165,10 +180,21 @@ export function DocReader({
         ) : doc ? (
           <article className="mx-auto max-w-[68ch] px-4 py-6 sm:px-6">
             <section className="overflow-hidden rounded-lg border border-line bg-sunken/45">
-              {doc.meta.summary ? (
-                <div className="border-l-2 border-accent-line px-4 py-3.5">
-                  <p className="eyebrow mb-1.5">Summary</p>
-                  <p className="text-[13.5px] leading-relaxed text-muted">{doc.meta.summary}</p>
+              <div className="border-l-2 border-accent-line px-4 py-3.5">
+                <p className="eyebrow mb-1.5">Summary</p>
+                <p className="text-[13.5px] leading-relaxed text-muted">{completeSummary}</p>
+              </div>
+              {laws.length > 0 ? (
+                <div className="border-t border-line px-4 py-3">
+                  <p className="eyebrow mb-2">Relevant laws &amp; sections</p>
+                  <ul className="space-y-2">
+                    {laws.map((law) => (
+                      <li key={law.statute} className="text-[13px] leading-relaxed text-muted">
+                        <span className="font-medium text-ink">{law.statute}</span>
+                        <span className="text-faint"> — {law.sections.slice(0, 3).join("; ")}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ) : null}
               <button
@@ -210,6 +236,11 @@ export function DocReader({
                 ) : null}
               </div>
             ) : null}
+
+            <footer className="mt-8 rounded-lg border border-line bg-raised/60 px-4 py-3.5">
+              <p className="eyebrow mb-1.5">Quick summary</p>
+              <p className="text-[13.5px] leading-relaxed text-ink">{footerSummary}</p>
+            </footer>
           </article>
         ) : null}
       </div>

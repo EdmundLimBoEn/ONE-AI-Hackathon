@@ -58,6 +58,8 @@ export function validateSearchInput(value: unknown): SearchInput {
 export interface ChatInput {
   query: string;
   topK: number;
+  /** Optional override for the RAG system prompt (tweaked in the atlas UI). */
+  systemPrompt?: string;
 }
 
 export function validateChatInput(value: unknown): ChatInput {
@@ -71,9 +73,15 @@ export function validateChatInput(value: unknown): ChatInput {
     query = latest && isRecord(latest) ? latest.content : undefined;
   }
 
+  let systemPrompt: string | undefined;
+  if (value.systemPrompt !== undefined) {
+    systemPrompt = boundedString(value.systemPrompt, "systemPrompt", 8_000, 20);
+  }
+
   return {
     query: boundedString(query, "query", MAX_QUERY_LENGTH),
     topK: boundedTopK(value.topK, 6),
+    systemPrompt,
   };
 }
 

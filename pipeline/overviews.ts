@@ -33,7 +33,17 @@ async function llmIntroduction(topic: string, docs: TopicDoc[], apiKey: string):
 
 function localIntroduction(topic: string, docs: TopicDoc[]): string {
   const tags = [...new Set(docs.flatMap((doc) => doc.tags))].slice(0, 8).join(", ");
-  return `This folder collects ${docs.length} Singapore judgment${docs.length === 1 ? "" : "s"} concerning ${topic}. The materials currently emphasise ${tags || "the principal cases and legal tests in this topic"}. Start with the cases below, then follow their related-precedent links and backlinks to move across the atlas.`;
+  const sample = docs
+    .slice(0, 3)
+    .map((doc) => `${doc.citation} (${doc.title})`)
+    .join("; ");
+  return (
+    `This folder maps real Singapore court judgments concerning ${topic}. ` +
+    `It currently holds ${docs.length} judgment${docs.length === 1 ? "" : "s"}` +
+    `${tags ? `, emphasising ${tags}` : ""}. ` +
+    `Representative authorities include ${sample || "the linked cases below"}. ` +
+    `Open each judgment for its complete summary, statutory sections, holdings, and footer quick summary, then follow related-precedent links across the atlas.`
+  );
 }
 
 async function main(): Promise<void> {
@@ -84,9 +94,31 @@ async function main(): Promise<void> {
       kind: "overview",
     };
     const folders = childFolders.length ? `## Subtopics\n\n${childFolders.map((name) => `- **${name}**`).join("\n")}\n\n` : "";
-    const cases = topicDocs.sort((a, b) => a.citation.localeCompare(b.citation)).map((doc) => `- [[${doc.id}|${doc.title}]] — ${doc.citation}`).join("\n");
+    const cases = topicDocs
+      .sort((a, b) => a.citation.localeCompare(b.citation))
+      .map((doc) => `- [[${doc.id}|${doc.title}]] — ${doc.citation}. ${doc.summary.slice(0, 180)}${doc.summary.length > 180 ? "…" : ""}`)
+      .join("\n");
+    const quickSummary =
+      `Quick summary: Topic guide to real Singapore cases on ${topic} (${topicDocs.length} judgment${topicDocs.length === 1 ? "" : "s"}). ` +
+      `Use the key cases below for citable holdings; each document ends with its own quick summary and statutory map.`;
+    const body = `# ${topic}
+
+## Summary
+
+${intro}
+
+${folders}## Key cases
+
+${cases}
+
+---
+
+### Quick summary
+
+${quickSummary}
+`;
     await ensureParent(output);
-    await Bun.write(output, matter.stringify(`# ${topic}\n\n${intro}\n\n${folders}## Key cases\n\n${cases}\n`, data));
+    await Bun.write(output, matter.stringify(body, data));
     log(`overview ${relative(vaultDir, dirname(output)).split(sep).join("/") || "."}`);
   }
 }

@@ -13,9 +13,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Singapore Law Atlas",
+  title: {
+    default: "Singapore Law Atlas",
+    template: "%s · Singapore Law Atlas",
+  },
   description:
-    "A connected map of Singapore case law and statutes — explore precedent as a graph, read judgments with linked citations, and test depositions against the corpus.",
+    "Singapore Law Atlas maps written law (Penal Code, Constitution, Civil Law Act, and other codes) and case law as a connected research graph — open statutes, follow precedents, ask citation-grounded questions, and analyse depositions.",
+  applicationName: "Singapore Law Atlas",
+  authors: [{ name: "Edmund Lim" }],
+  openGraph: {
+    title: "Singapore Law Atlas",
+    description:
+      "Graph-first research workspace for Singapore written law and judgments.",
+    type: "website",
+  },
 };
 
 export const viewport: Viewport = {

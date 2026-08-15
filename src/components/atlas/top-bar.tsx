@@ -81,7 +81,7 @@ export function TopBar({
             Singapore Law Atlas
           </span>
           <span className="hidden text-[10.5px] leading-tight text-faint sm:block">
-            {nodeCount} authorities · precedent graph
+            {nodeCount} codes, statutes &amp; cases · graph atlas
           </span>
         </span>
       </Link>

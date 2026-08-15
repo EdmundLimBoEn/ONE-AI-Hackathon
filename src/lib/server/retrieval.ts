@@ -1,4 +1,5 @@
 import graphFixture from "@/fixtures/graph.json";
+import { ensureCompleteSummary } from "@/lib/document-brief";
 import type { GraphData, GraphNode, SearchResult } from "@/lib/types";
 import type { LawAtlasEnv } from "@/lib/cloudflare";
 import { ApiError, withTimeout } from "./errors";
@@ -23,7 +24,7 @@ function fixtureResult(node: GraphNode, score: number): SearchResult {
     docId: node.id,
     title: node.title,
     citation: node.citation,
-    excerpt: node.summary,
+    excerpt: ensureCompleteSummary(node),
     score,
   };
 }

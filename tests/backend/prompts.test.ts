@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { SearchResult } from "../../src/lib/types";
-import { buildRagMessages, renderCitation } from "../../src/lib/server/prompts";
+import {
+  buildRagMessages,
+  DEFAULT_RAG_SYSTEM_PROMPT,
+  renderCitation,
+} from "../../src/lib/server/prompts";
 import { chunkChatText } from "../../src/lib/server/sse";
 import {
   buildOpenRouterRequestBody,
@@ -24,8 +28,20 @@ describe("RAG prompt helpers", () => {
   test("includes source identity and guards against invented authorities", () => {
     const messages = buildRagMessages("What is the duty test?", [source]);
     expect(messages[0].content).toContain("do not invent authorities");
+    expect(messages[0].content).toContain("What it is");
+    expect(messages[0].content).toContain("How it is applicable to our case");
+    expect(messages[0].content).toContain("How it will be used");
+    expect(messages[0].content).toContain("Precedents set");
+    expect(messages[0].content).toBe(DEFAULT_RAG_SYSTEM_PROMPT);
     expect(messages[1].content).toContain("Document ID: spandeck-v-dsta-2007");
     expect(messages[1].content).toContain("[Spandeck Engineering v DSTA [2007] SGCA 37]");
+    expect(messages[1].content).toContain("paper to analyse");
+  });
+
+  test("accepts a custom system prompt override for live tweaking", () => {
+    const custom = "You are a terse Singapore statutory research bot. Cite sections only.";
+    const messages = buildRagMessages("Explain s 304A", [source], custom);
+    expect(messages[0].content).toBe(custom);
   });
 });
 

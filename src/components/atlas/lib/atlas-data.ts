@@ -7,6 +7,11 @@ import type {
 } from "@/lib/types";
 import fixtureGraph from "@/fixtures/graph.json";
 import fixtureTree from "@/fixtures/tree.json";
+import {
+  buildDocumentMarkdown,
+  ensureCompleteSummary,
+  finalizeDocumentMarkdown,
+} from "@/lib/document-brief";
 import { DEMO_DOCS, type DemoDoc } from "./demo-corpus";
 import { legalDomainOf } from "./categories";
 
@@ -63,7 +68,7 @@ function toMeta(raw: unknown): DocMeta | null {
   const id = typeof raw.id === "string" ? raw.id : null;
   if (!id) return null;
   const yearValue = raw.year;
-  return {
+  const draft: DocMeta = {
     id,
     title: typeof raw.title === "string" ? raw.title : id,
     citation: typeof raw.citation === "string" ? raw.citation : "",
@@ -82,6 +87,7 @@ function toMeta(raw: unknown): DocMeta | null {
         ? raw.kind
         : undefined,
   };
+  return { ...draft, summary: ensureCompleteSummary(draft) };
 }
 
 function normalizeGraph(raw: unknown): GraphData | null {
@@ -371,49 +377,19 @@ function extractMeta(raw: unknown): DocMeta | null {
  * graph always opens something substantive even before the corpus is indexed.
  */
 export function synthesizeContent(meta: DocMeta, index?: AtlasIndex): string {
-  const lines: string[] = [];
-  if (meta.summary) lines.push(`## In brief\n\n${meta.summary}`);
-
-  const facets = [
-    ["Court", meta.court],
-    ["Year", meta.year ? String(meta.year) : ""],
-    ["Citation", meta.citation],
-    ["Category", meta.categoryPath.join(" › ")],
-  ].filter(([, value]) => Boolean(value));
-
-  if (facets.length > 0) {
-    lines.push(
-      `## Record\n\n| Field | Value |\n| --- | --- |\n${facets
-        .map(([label, value]) => `| ${label} | ${value} |`)
-        .join("\n")}`,
-    );
+  const complete: DocMeta = { ...meta, summary: ensureCompleteSummary(meta) };
+  const relatedTitles = new Map<string, string>();
+  if (index) {
+    for (const id of complete.relatedIds) {
+      const title = index.docsById.get(id)?.title;
+      if (title) relatedTitles.set(id, title);
+    }
   }
-
-  if (meta.tags.length > 0) {
-    lines.push(
-      `## Issues raised\n\n${meta.tags.map((tag) => `- ${tag.replace(/-/g, " ")}`).join("\n")}`,
-    );
-  }
-
-  const related = meta.relatedIds.filter((id) => !index || index.docsById.has(id));
-  if (related.length > 0) {
-    lines.push(
-      `## Authorities in this line\n\n${related
-        .map((id) => {
-          const title = index?.docsById.get(id)?.title;
-          return `- [[${id}${title ? `|${title}` : ""}]]`;
-        })
-        .join("\n")}`,
-    );
-  }
-
-  lines.push(
-    `> Full text is not in the local index yet. This view is assembled from the atlas metadata${
-      meta.sourceUrl ? ` — the authoritative text is available at the source link above.` : "."
-    }`,
-  );
-
-  return lines.join("\n\n");
+  return buildDocumentMarkdown(complete, {
+    relatedIds: complete.relatedIds,
+    relatedTitles,
+    indexHas: index ? (id) => index.docsById.has(id) : undefined,
+  });
 }
 
 export async function loadDoc(id: string, index: AtlasIndex): Promise<AtlasDoc> {
@@ -422,19 +398,41 @@ export async function loadDoc(id: string, index: AtlasIndex): Promise<AtlasDoc> 
   const content = extractContent(raw);
   const meta = extractMeta(raw) ?? known ?? null;
 
-  if (content && meta) return { meta, content, source: "live" };
-
   const demo = DEMO_DOCS.find((doc): doc is DemoDoc => doc.id === id);
+  // Prefer curated written-law digests over thin metadata shells from the index.
+  if (demo?.content) {
+    const complete = {
+      ...(meta ?? demo),
+      ...demo,
+      summary: ensureCompleteSummary({ ...(meta ?? demo), ...demo }),
+    };
+    return {
+      meta: complete,
+      content: finalizeDocumentMarkdown(demo.content, complete),
+      source: index.source === "live" && content ? "live" : "demo",
+    };
+  }
+
+  if (content && meta) {
+    const complete = { ...meta, summary: ensureCompleteSummary(meta) };
+    return {
+      meta: complete,
+      content: finalizeDocumentMarkdown(content, complete),
+      source: "live",
+    };
+  }
+
   const fallbackMeta = meta ?? demo ?? null;
   if (!fallbackMeta) {
     throw new Error(`No document found for "${id}"`);
   }
-  if (demo?.content) {
-    return { meta: fallbackMeta, content: demo.content, source: "demo" };
-  }
+  const complete = {
+    ...fallbackMeta,
+    summary: ensureCompleteSummary(fallbackMeta),
+  };
   return {
-    meta: fallbackMeta,
-    content: synthesizeContent(fallbackMeta, index),
+    meta: complete,
+    content: synthesizeContent(complete, index),
     source: index.source === "live" ? "fixture" : index.source,
   };
 }

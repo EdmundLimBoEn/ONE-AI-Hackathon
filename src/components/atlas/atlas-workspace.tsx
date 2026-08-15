@@ -5,6 +5,7 @@ import { Network } from "lucide-react";
 import type { SearchResult } from "@/lib/types";
 import { loadDoc, loadIndex, type AtlasDoc, type AtlasIndex } from "./lib/atlas-data";
 import { categoryOf } from "./lib/categories";
+import { SINGAPORE_LAW_OVERVIEW_ID } from "./lib/guide-docs";
 import { searchNodes } from "./lib/search";
 import { useTheme } from "./lib/use-theme";
 import { TopBar } from "./top-bar";
@@ -25,11 +26,13 @@ interface InitialState {
 }
 
 function readInitialState(): InitialState {
-  if (typeof window === "undefined") return { docId: null, view: "graph", query: "" };
+  if (typeof window === "undefined") {
+    return { docId: SINGAPORE_LAW_OVERVIEW_ID, view: "graph", query: "" };
+  }
   const params = new URLSearchParams(window.location.search);
   const view = params.get("view");
   return {
-    docId: params.get("doc"),
+    docId: params.get("doc") || SINGAPORE_LAW_OVERVIEW_ID,
     view: view === "tree" || view === "folders" ? view : "graph",
     query: params.get("q") ?? "",
   };

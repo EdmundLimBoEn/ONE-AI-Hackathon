@@ -1,5 +1,6 @@
 import type { GraphData, GraphNode } from "@/lib/types";
 import { categoryOf, legalDomainOf } from "./categories";
+import { SINGAPORE_LAW_OVERVIEW_ID } from "./guide-docs";
 
 export const MAX_DOCUMENT_CONNECTIONS = 3;
 
@@ -244,6 +245,25 @@ function makeGuideNode(
   count: number,
   role: "root" | "domain" | "topic" | "subtopic",
 ): GraphNode {
+  const summary =
+    role === "root"
+      ? `Singapore Law Atlas hub — ${count} authorities spanning written law (Constitution, Penal Code, CPC, Civil Law Act, and other codes) and case law. Click to open the written-law overview of Singapore’s legal system.`
+      : role === "domain" && title === "Legislation"
+        ? `${count} written-law files: Constitution, Penal Code, CPC, MDA, Evidence Act, Civil Law Act, Companies Act, Women’s Charter, WSHA, and more. Click to open the codes overview.`
+        : role === "domain" && title === "Criminal justice"
+          ? `${count} criminal authorities. Click to open the Penal Code 1871 — Singapore’s principal criminal code — then follow related procedure and drugs statutes.`
+          : role === "domain" && title === "Civil law"
+            ? `${count} civil authorities. Click to open the Civil Law Act 1909 (contributory negligence, dependency claims), then negligence and commercial case law.`
+            : role === "domain" && title === "Public law"
+              ? `${count} public-law authorities. Click to open the Constitution of the Republic of Singapore.`
+              : role === "domain"
+                ? `${count} files in ${title}. Click a document, or open the Singapore written-law overview from Legislation.`
+                : role === "topic" && category === "Statutes"
+                  ? `${count} written laws under ${title} — primary legislation with section maps and Singapore Statutes Online links.`
+                  : role === "topic"
+                    ? `${count} files in ${category}. Click a judgment or statute node to open it.`
+                    : `${count} files grouped under ${title}.`;
+
   return {
     id,
     title,
@@ -251,16 +271,9 @@ function makeGuideNode(
     court: "Atlas",
     year: 0,
     categoryPath: role === "root" || role === "domain" ? [title] : role === "topic" ? [category] : [category, title],
-    tags: [slugId(category), slugId(title)],
-    summary:
-      role === "root"
-        ? `${count} files arranged across Singapore's main legal domains.`
-        : role === "domain"
-        ? `${count} files arranged across the ${title.toLowerCase()} branches.`
-        : role === "topic"
-          ? `${count} files in ${category}.`
-          : `${count} files grouped under ${title}.`,
-    relatedIds: [],
+    tags: [slugId(category), slugId(title), role === "root" ? "singapore-law" : slugId(role)],
+    summary,
+    relatedIds: role === "root" || title === "Legislation" ? [SINGAPORE_LAW_OVERVIEW_ID] : [],
     kind: "overview",
     degree: count,
   };
