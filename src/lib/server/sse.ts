@@ -15,23 +15,15 @@ export function localChatText(query: string, sources: SearchResult[]): string {
 }
 
 export function createSseChatStream(
-  textStream: ReadableStream<string> | null,
+  text: string,
   sources: SearchResult[],
-  localText?: string,
 ): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
-    async start(controller) {
+    start(controller) {
       controller.enqueue(encodeSse("metadata", { sources }));
       try {
-        if (textStream) {
-          const reader = textStream.getReader();
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            controller.enqueue(encodeSse("delta", { text: value }));
-          }
-        } else if (localText) {
-          controller.enqueue(encodeSse("delta", { text: localText }));
+        for (const chunk of chunkChatText(text)) {
+          controller.enqueue(encodeSse("delta", { text: chunk }));
         }
         controller.enqueue(encodeSse("done", {}));
       } catch {
@@ -43,6 +35,10 @@ export function createSseChatStream(
       }
     },
   });
+}
+
+export function chunkChatText(text: string): string[] {
+  return text.match(/[\s\S]{1,96}/g) ?? [text];
 }
 
 export const SSE_HEADERS: HeadersInit = {

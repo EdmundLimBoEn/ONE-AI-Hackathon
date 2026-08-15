@@ -27,6 +27,7 @@ export function buildOpenRouterRequestBody(
     stream,
     temperature: 0.15,
     max_tokens: maxTokens,
+    reasoning: { effort: "none", exclude: true },
     ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
     ...(options.privacy === "no-storage"
       ? { provider: { data_collection: "deny", zdr: true } }
@@ -171,6 +172,24 @@ export async function completeJson<T>(
   return parseJsonObject<T>(content);
 }
 
+export async function completeText(
+  apiKey: string,
+  messages: ChatMessage[],
+  options: OpenRouterOptions = {},
+): Promise<string> {
+  const response = await firstSuccessfulResponse(apiKey, messages, false, false, options);
+  const responseText = await readBoundedResponse(response);
+  let payload: { choices?: Array<{ message?: { content?: string } }> };
+  try {
+    payload = JSON.parse(responseText) as typeof payload;
+  } catch {
+    throw new ApiError(502, "invalid_model_response", "The language model returned invalid data.");
+  }
+  const content = payload.choices?.[0]?.message?.content?.trim();
+  if (!content) throw new ApiError(502, "invalid_model_response", "The language model returned no content.");
+  return content;
+}
+
 export async function openChatStream(
   apiKey: string,
   messages: ChatMessage[],
@@ -210,6 +229,7 @@ export function decodeOpenRouterStream(body: ReadableStream<Uint8Array>): Readab
         buffer += decoder.decode(value, { stream: !done });
         const lines = buffer.split("\n");
         buffer = done ? "" : (lines.pop() ?? "");
+        let emittedContent = false;
 
         for (const line of lines) {
           const payload = line.trim();
@@ -232,6 +252,7 @@ export function decodeOpenRouterStream(body: ReadableStream<Uint8Array>): Readab
               }
               const boundedContent = content.slice(0, remaining);
               controller.enqueue(boundedContent);
+              emittedContent = true;
               emittedCharacters += boundedContent.length;
               if (boundedContent.length < content.length) {
                 await reader.cancel("Output limit reached");
@@ -249,7 +270,7 @@ export function decodeOpenRouterStream(body: ReadableStream<Uint8Array>): Readab
           controller.close();
           return;
         }
-        if (lines.length > 0) return;
+        if (emittedContent) return;
       }
     },
     async cancel(reason) {

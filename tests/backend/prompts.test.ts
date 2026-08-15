@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { SearchResult } from "../../src/lib/types";
 import { buildRagMessages, renderCitation } from "../../src/lib/server/prompts";
+import { chunkChatText } from "../../src/lib/server/sse";
 import {
   buildOpenRouterRequestBody,
+  decodeOpenRouterStream,
   parseJsonObject,
 } from "../../src/lib/server/openrouter";
 
@@ -57,4 +59,47 @@ describe("OpenRouter request privacy", () => {
     expect(body.max_tokens).toBe(2_000);
     expect(body).not.toHaveProperty("provider");
   });
+
+  test("reserves output budget for the user-facing answer", () => {
+    const body = buildOpenRouterRequestBody(
+      "nvidia/nemotron-3-nano-30b-a3b:free",
+      [{ role: "user", content: "Summarise the authorities." }],
+      true,
+      false,
+    );
+    expect(body.reasoning).toEqual({ effort: "none", exclude: true });
+  });
+});
+
+describe("OpenRouter stream decoding", () => {
+  test("reads through heartbeat-only chunks before answer content", async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(": OPENROUTER PROCESSING\n\n"));
+        controller.enqueue(
+          encoder.encode(
+            'data: {"choices":[{"delta":{"content":"Spandeck answer"}}]}\n\n',
+          ),
+        );
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+
+    const reader = decodeOpenRouterStream(body).getReader();
+    let result = "";
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      result += chunk.value;
+    }
+    expect(result).toBe("Spandeck answer");
+  });
+});
+
+test("completed model answers are split into streamable chunks", () => {
+  const chunks = chunkChatText("A".repeat(250));
+  expect(chunks.length).toBeGreaterThan(1);
+  expect(chunks.join("")).toBe("A".repeat(250));
 });

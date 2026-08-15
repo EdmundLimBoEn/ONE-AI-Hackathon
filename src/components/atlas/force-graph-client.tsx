@@ -9,6 +9,8 @@ export interface SimNodeBase {
   id: string;
   x?: number;
   y?: number;
+  fx?: number;
+  fy?: number;
 }
 
 export interface ForceGraphHandle {
@@ -36,6 +38,8 @@ export interface ForceGraphClientProps<
   particleColor: string;
   onNodeHover: (node: N | null) => void;
   onNodeClick: (node: N) => void;
+  onNodeDrag: (node: N) => void;
+  onNodeDragEnd: (node: N) => void;
   onBackgroundClick: () => void;
   onEngineStop: () => void;
   /**
@@ -65,6 +69,8 @@ export default function ForceGraphClient<
   particleColor,
   onNodeHover,
   onNodeClick,
+  onNodeDrag,
+  onNodeDragEnd,
   onBackgroundClick,
   onEngineStop,
   onReady,
@@ -98,6 +104,8 @@ export default function ForceGraphClient<
       linkDirectionalParticleColor={() => particleColor}
       onNodeHover={onNodeHover}
       onNodeClick={onNodeClick}
+      onNodeDrag={onNodeDrag}
+      onNodeDragEnd={onNodeDragEnd}
       onBackgroundClick={onBackgroundClick}
       onEngineStop={onEngineStop}
       cooldownTicks={140}

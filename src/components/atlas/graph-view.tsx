@@ -10,7 +10,7 @@ import {
   type ComponentType,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import { Crosshair, Maximize2, Minus, Plus } from "lucide-react";
+import { Crosshair, Maximize2, Minus, PinOff, Plus } from "lucide-react";
 import type { GraphNode } from "@/lib/types";
 import { categoryOf, courtLabel, resolveCategoryColor } from "./lib/categories";
 import type { AtlasIndex } from "./lib/atlas-data";
@@ -34,6 +34,8 @@ interface SimNode {
   clusterY: number;
   x?: number;
   y?: number;
+  fx?: number;
+  fy?: number;
   vx?: number;
   vy?: number;
 }
@@ -49,6 +51,8 @@ const ForceGraphClient = dynamic(() => import("./force-graph-client"), {
   ssr: false,
   loading: () => <GraphSkeleton />,
 }) as unknown as ComponentType<ForceGraphClientProps<SimNode, SimLink>>;
+
+const PINNED_LAYOUT_KEY = "singapore-law-atlas:pinned-nodes:v1";
 
 function GraphSkeleton() {
   return (
@@ -101,6 +105,7 @@ export function GraphView({
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [anchoredTooltipPosition, setAnchoredTooltipPosition] = useState({ x: 0, y: 0 });
   const [tooltipAnchor, setTooltipAnchor] = useState<"pointer" | "node">("pointer");
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => new Set());
 
   const palette = usePalette(theme);
 
@@ -237,6 +242,22 @@ export function GraphView({
     });
     return { nodes, links };
   }, [activeCategories, data]);
+
+  useEffect(() => {
+    const positions = readPinnedPositions();
+    const restored = new Set<string>();
+    for (const [id, position] of Object.entries(positions)) {
+      const node = nodeById.get(id);
+      if (!node) continue;
+      node.x = position.x;
+      node.y = position.y;
+      node.fx = position.x;
+      node.fy = position.y;
+      restored.add(id);
+    }
+    setPinnedIds(restored);
+    if (restored.size > 0) graphRef.current?.d3ReheatSimulation?.();
+  }, [nodeById]);
 
   useEffect(() => {
     const element = wrapRef.current;
@@ -398,6 +419,17 @@ export function GraphView({
         ctx.stroke();
       }
 
+      if (pinnedIds.has(node.id)) {
+        ctx.save();
+        ctx.setLineDash([2.5 / scale, 2.5 / scale]);
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius + 6.5, 0, Math.PI * 2);
+        ctx.strokeStyle = palette.ink;
+        ctx.lineWidth = 1.15 / scale;
+        ctx.stroke();
+        ctx.restore();
+      }
+
       const categoryFocused = focusRequest?.category === node.category;
       const showLabel =
         node.role === "topic" ||
@@ -424,7 +456,7 @@ export function GraphView({
 
       ctx.globalAlpha = 1;
     },
-    [focusRequest?.category, focusedId, highlight, isDimmed, palette, selectedId],
+    [focusRequest?.category, focusedId, highlight, isDimmed, palette, pinnedIds, selectedId],
   );
 
   const paintPointerArea = useCallback((node: SimNode, color: string, ctx: Canvas2D) => {
@@ -605,6 +637,37 @@ export function GraphView({
     graphRef.current?.zoomToFit(400, 70);
   }, [onFocusCategory]);
 
+  const pinNode = useCallback((node: SimNode) => {
+    if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+    const x = node.x as number;
+    const y = node.y as number;
+    node.fx = x;
+    node.fy = y;
+    node.vx = 0;
+    node.vy = 0;
+    const positions = readPinnedPositions();
+    positions[node.id] = { x, y };
+    writePinnedPositions(positions);
+    setPinnedIds((current) => {
+      if (current.has(node.id)) return current;
+      const next = new Set(current);
+      next.add(node.id);
+      return next;
+    });
+  }, []);
+
+  const releasePinnedNodes = useCallback(() => {
+    for (const id of pinnedIds) {
+      const node = nodeById.get(id);
+      if (!node) continue;
+      node.fx = undefined;
+      node.fy = undefined;
+    }
+    window.localStorage.removeItem(PINNED_LAYOUT_KEY);
+    setPinnedIds(new Set());
+    graphRef.current?.d3ReheatSimulation?.();
+  }, [nodeById, pinnedIds]);
+
   const tooltipNode = activeId ? index.docsById.get(activeId) : null;
   const tooltipPosition = tooltipAnchor === "node" ? anchoredTooltipPosition : pointer;
 
@@ -648,6 +711,11 @@ export function GraphView({
               if (node.role === "document") onSelect(node.id);
               else onFocusCategory(node.category);
             }}
+            onNodeDrag={(node) => {
+              if (node.x !== undefined) node.fx = node.x;
+              if (node.y !== undefined) node.fy = node.y;
+            }}
+            onNodeDragEnd={pinNode}
             onBackgroundClick={() => setFocusedId(null)}
             onEngineStop={handleEngineStop}
             onReady={handleReady}
@@ -684,6 +752,18 @@ export function GraphView({
             onClick={() => selectedId && focusNode(selectedId)}
           >
             <Crosshair className="size-4" />
+          </IconButton>
+          <IconButton
+            label={
+              pinnedIds.size === 0
+                ? "No pinned nodes"
+                : `Release ${pinnedIds.size} pinned node${pinnedIds.size === 1 ? "" : "s"}`
+            }
+            size="sm"
+            disabled={pinnedIds.size === 0}
+            onClick={releasePinnedNodes}
+          >
+            <PinOff className="size-4" />
           </IconButton>
       </div>
 
@@ -919,6 +999,7 @@ function createClusterForce(): AtlasForce {
     const pull = alpha * 0.115;
     for (const node of nodes) {
       if (node.x === undefined || node.y === undefined) continue;
+      if (node.fx !== undefined || node.fy !== undefined) continue;
       node.vx = (node.vx ?? 0) + (node.clusterX - node.x) * pull;
       node.vy = (node.vy ?? 0) + (node.clusterY - node.y) * pull;
     }
@@ -948,10 +1029,14 @@ function createCollisionForce(padding: number): AtlasForce {
         const overlap = ((minimum - distance) / distance) * push;
         dx *= overlap;
         dy *= overlap;
-        left.vx = (left.vx ?? 0) - dx;
-        left.vy = (left.vy ?? 0) - dy;
-        right.vx = (right.vx ?? 0) + dx;
-        right.vy = (right.vy ?? 0) + dy;
+        if (left.fx === undefined && left.fy === undefined) {
+          left.vx = (left.vx ?? 0) - dx;
+          left.vy = (left.vy ?? 0) - dy;
+        }
+        if (right.fx === undefined && right.fy === undefined) {
+          right.vx = (right.vx ?? 0) + dx;
+          right.vy = (right.vy ?? 0) + dy;
+        }
       }
     }
   }) as AtlasForce;
@@ -959,4 +1044,34 @@ function createCollisionForce(padding: number): AtlasForce {
     nodes = next;
   };
   return force;
+}
+
+interface PinnedPosition {
+  x: number;
+  y: number;
+}
+
+function readPinnedPositions(): Record<string, PinnedPosition> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(PINNED_LAYOUT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, Partial<PinnedPosition>>;
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, PinnedPosition] =>
+          Number.isFinite(entry[1]?.x) && Number.isFinite(entry[1]?.y),
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writePinnedPositions(positions: Record<string, PinnedPosition>): void {
+  try {
+    window.localStorage.setItem(PINNED_LAYOUT_KEY, JSON.stringify(positions));
+  } catch {
+    // A dropped node remains pinned for this session if browser storage is unavailable.
+  }
 }
