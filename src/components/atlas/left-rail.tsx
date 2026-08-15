@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import {
+  Eye,
+  EyeOff,
   FolderTree,
   ListTree,
   Search,
@@ -34,7 +36,9 @@ export function LeftRail({
   selectedId,
   onSelect,
   activeCategories,
-  onToggleCategory,
+  focusedCategory,
+  onFocusCategory,
+  onToggleCategoryVisibility,
   onResetCategories,
   searchRef,
 }: {
@@ -47,7 +51,9 @@ export function LeftRail({
   selectedId: string | null;
   onSelect: (id: string) => void;
   activeCategories: Set<string>;
-  onToggleCategory: (category: string) => void;
+  focusedCategory: string | null;
+  onFocusCategory: (category: string) => void;
+  onToggleCategoryVisibility: (category: string) => void;
   onResetCategories: () => void;
   searchRef: React.RefObject<HTMLInputElement | null>;
 }) {
@@ -76,6 +82,7 @@ export function LeftRail({
   }, [query]);
 
   const allActive = activeCategories.size === categories.length;
+  const resetDisabled = allActive && !focusedCategory;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-panel">
@@ -181,7 +188,7 @@ export function LeftRail({
                   <button
                     type="button"
                     onClick={onResetCategories}
-                    disabled={allActive}
+                    disabled={resetDisabled}
                     className="inline-flex items-center gap-1 text-[10px] text-faint transition-colors hover:text-ink disabled:opacity-40"
                   >
                     <SlidersHorizontal aria-hidden className="size-3" />
@@ -193,36 +200,55 @@ export function LeftRail({
               </SectionLabel>
               <div className="flex flex-col gap-0.5 px-2 pb-1">
                 {categories.map(([category, count]) => {
-                  const active = activeCategories.has(category);
+                  const visible = activeCategories.has(category);
+                  const focused = focusedCategory === category;
                   return (
-                    <label
+                    <div
                       key={category}
                       className={cn(
-                        "flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px] transition-colors",
-                        active ? "text-ink" : "text-faint",
-                        "hover:bg-sunken",
+                        "group flex items-center rounded-md transition-colors hover:bg-sunken focus-within:bg-sunken",
+                        focused && visible && "bg-sunken ring-1 ring-inset ring-line-strong",
                       )}
                     >
-                      <input
-                        type="checkbox"
-                        checked={active}
-                        onChange={() => onToggleCategory(category)}
-                        className="sr-only"
-                      />
-                      <span
-                        aria-hidden
+                      <button
+                        type="button"
+                        aria-pressed={focused}
+                        onClick={() => onFocusCategory(category)}
                         className={cn(
-                          "size-2.5 shrink-0 rounded-full ring-2 ring-offset-1 transition-all",
-                          active ? "ring-transparent" : "ring-line",
+                          "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left text-[12.5px] transition-colors",
+                          visible ? "text-ink" : "text-faint line-through",
                         )}
-                        style={{
-                          background: active ? categoryColor(category) : "transparent",
-                          boxShadow: active ? `0 0 0 1px ${categoryColor(category)}` : undefined,
-                        }}
-                      />
-                      <span className="min-w-0 flex-1 truncate">{category}</span>
-                      <span className="text-[10px] tabular-nums text-faint">{count}</span>
-                    </label>
+                      >
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "size-2.5 shrink-0 rounded-full transition-transform",
+                            focused && visible && "scale-125",
+                          )}
+                          style={{
+                            background: categoryColor(category),
+                            opacity: visible ? 1 : 0.3,
+                            boxShadow: focused && visible ? `0 0 0 3px ${categoryColor(category)}22` : undefined,
+                          }}
+                        />
+                        <span className="min-w-0 flex-1 truncate">{category}</span>
+                        <span className="text-[10px] tabular-nums text-faint">{count}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onToggleCategoryVisibility(category)}
+                        aria-label={`${visible ? "Hide" : "Show"} ${category}`}
+                        title={`${visible ? "Hide" : "Show"} ${category}`}
+                        className={cn(
+                          "mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded text-faint transition-all hover:bg-raised hover:text-ink focus-visible:opacity-100",
+                          visible
+                            ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                            : "opacity-100 text-muted",
+                        )}
+                      >
+                        {visible ? <EyeOff aria-hidden className="size-3.5" /> : <Eye aria-hidden className="size-3.5" />}
+                      </button>
+                    </div>
                   );
                 })}
               </div>

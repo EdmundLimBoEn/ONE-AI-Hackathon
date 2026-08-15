@@ -26,7 +26,9 @@ import { cn } from "@/components/ui/cn";
 interface SimNode {
   id: string;
   node: GraphNode;
+  role: "document" | "topic" | "subtopic";
   category: string;
+  subtopic?: string;
   radius: number;
   clusterX: number;
   clusterY: number;
@@ -75,6 +77,8 @@ export interface GraphViewProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   activeCategories: Set<string>;
+  focusRequest: { category: string; sequence: number } | null;
+  onFocusCategory: (category: string | null) => void;
   matchedIds: Set<string> | null;
   theme: Theme;
 }
@@ -84,6 +88,8 @@ export function GraphView({
   selectedId,
   onSelect,
   activeCategories,
+  focusRequest,
+  onFocusCategory,
   matchedIds,
   theme,
 }: GraphViewProps) {
@@ -99,41 +105,138 @@ export function GraphView({
   const palette = usePalette(theme);
 
   const data = useMemo(() => {
-    const categoryNames = [...new Set(index.graph.nodes.map((node) => categoryOf(node.categoryPath)))].sort();
-    const categoryCounts = new Map<string, number>();
-    const clusterRadius = Math.max(300, categoryNames.length * 38);
-    const nodes = index.graph.nodes.map((node) => {
+    const categoryBuckets = new Map<string, GraphNode[]>();
+    for (const node of index.graph.nodes) {
       const category = categoryOf(node.categoryPath);
-      const categoryIndex = categoryNames.indexOf(category);
-      const clusterAngle = (categoryIndex / Math.max(1, categoryNames.length)) * Math.PI * 2 - Math.PI / 2;
-      const clusterX = Math.cos(clusterAngle) * clusterRadius;
-      const clusterY = Math.sin(clusterAngle) * clusterRadius;
-      const ordinal = categoryCounts.get(category) ?? 0;
-      categoryCounts.set(category, ordinal + 1);
-      const localAngle = ordinal * 2.399963229728653 + hashUnit(node.id) * 0.8;
-      const localRadius = 18 + Math.sqrt(ordinal) * 23;
-      const radius = Math.min(28, 3.6 + Math.sqrt(Math.max(0, node.degree)) * 2.5);
-      const created: SimNode = {
-        id: node.id,
-        node,
-        category,
-        radius,
-        clusterX,
-        clusterY,
-        x: clusterX + Math.cos(localAngle) * localRadius,
-        y: clusterY + Math.sin(localAngle) * localRadius,
-      };
-      return created;
-    });
+      const bucket = categoryBuckets.get(category) ?? [];
+      bucket.push(node);
+      categoryBuckets.set(category, bucket);
+    }
+    const categoryNames = [...categoryBuckets.keys()].sort();
+    const clusterRadius = Math.max(300, categoryNames.length * 38);
+    const nodes: SimNode[] = [];
     const links: SimLink[] = index.graph.edges.map((edge) => ({
       source: edge.source,
       target: edge.target,
       kind: edge.kind,
       weight: edge.weight,
     }));
+    const topicIds = new Map<string, string>();
+
+    categoryNames.forEach((category, categoryIndex) => {
+      const documents = categoryBuckets.get(category) ?? [];
+      const clusterAngle =
+        (categoryIndex / Math.max(1, categoryNames.length)) * Math.PI * 2 - Math.PI / 2;
+      const clusterX = Math.cos(clusterAngle) * clusterRadius;
+      const clusterY = Math.sin(clusterAngle) * clusterRadius;
+
+      const topicId = `topic:${slugId(category)}`;
+      topicIds.set(category, topicId);
+      nodes.push({
+        id: topicId,
+        node: makeGuideNode(topicId, category, category, documents.length, "topic"),
+        role: "topic",
+        category,
+        radius: Math.min(34, 18 + Math.sqrt(documents.length) * 2.05),
+        clusterX,
+        clusterY,
+        x: clusterX,
+        y: clusterY,
+      });
+
+      const subtopics = new Map<string, GraphNode[]>();
+      for (const document of documents) {
+        const subtopic = subtopicOf(document);
+        const bucket = subtopics.get(subtopic) ?? [];
+        bucket.push(document);
+        subtopics.set(subtopic, bucket);
+      }
+      const branches = [...subtopics.entries()].sort(
+        (left, right) => right[1].length - left[1].length || left[0].localeCompare(right[0]),
+      );
+
+      branches.forEach(([subtopic, branchDocuments], branchIndex) => {
+        const hasSubtopicHub = branchDocuments.length >= 2;
+        const branchAngle =
+          clusterAngle +
+          ((branchIndex + 1) / (branches.length + 1) - 0.5) * Math.min(Math.PI * 0.9, branches.length * 0.2);
+        const branchDistance = hasSubtopicHub ? 78 + Math.sqrt(branchDocuments.length) * 7 : 42;
+        const branchX = clusterX + Math.cos(branchAngle) * branchDistance;
+        const branchY = clusterY + Math.sin(branchAngle) * branchDistance;
+        let parentId = topicId;
+
+        if (hasSubtopicHub) {
+          const subtopicId = `subtopic:${slugId(category)}:${slugId(subtopic)}`;
+          parentId = subtopicId;
+          nodes.push({
+            id: subtopicId,
+            node: makeGuideNode(subtopicId, subtopic, category, branchDocuments.length, "subtopic"),
+            role: "subtopic",
+            category,
+            subtopic,
+            radius: Math.min(17, 7 + Math.sqrt(branchDocuments.length) * 1.8),
+            clusterX: branchX,
+            clusterY: branchY,
+            x: branchX,
+            y: branchY,
+          });
+          links.push({ source: topicId, target: subtopicId, kind: "branch", weight: 3 });
+        }
+
+        branchDocuments.forEach((node, ordinal) => {
+          const localAngle = ordinal * 2.399963229728653 + hashUnit(node.id) * 0.8;
+          const localRadius = 24 + Math.sqrt(ordinal) * 19;
+          const radius = Math.min(28, 3.6 + Math.sqrt(Math.max(0, node.degree)) * 2.5);
+          nodes.push({
+            id: node.id,
+            node,
+            role: "document",
+            category,
+            subtopic,
+            radius,
+            clusterX: branchX,
+            clusterY: branchY,
+            x: branchX + Math.cos(localAngle) * localRadius,
+            y: branchY + Math.sin(localAngle) * localRadius,
+          });
+          links.push({ source: parentId, target: node.id, kind: "branch", weight: 2 });
+        });
+      });
+    });
+
+    const categoryByDocument = new Map(
+      index.graph.nodes.map((node) => [node.id, categoryOf(node.categoryPath)]),
+    );
+    const topicBridges = new Map<string, { left: string; right: string; weight: number }>();
+    for (const edge of index.graph.edges) {
+      const left = categoryByDocument.get(edge.source);
+      const right = categoryByDocument.get(edge.target);
+      if (!left || !right || left === right) continue;
+      const key = pairKey(left, right);
+      const bridge = topicBridges.get(key) ?? { left, right, weight: 0 };
+      bridge.weight += Math.max(1, edge.weight);
+      topicBridges.set(key, bridge);
+    }
+    for (const bridge of topicBridges.values()) {
+      const source = topicIds.get(bridge.left);
+      const target = topicIds.get(bridge.right);
+      if (!source || !target || bridge.weight < 2) continue;
+      links.push({ source, target, kind: "topic-bridge", weight: bridge.weight });
+    }
+
     return { nodes, links };
   }, [index]);
   const nodeById = useMemo(() => new Map(data.nodes.map((node) => [node.id, node])), [data.nodes]);
+  const visibleData = useMemo(() => {
+    const nodes = data.nodes.filter((node) => activeCategories.has(node.category));
+    const visibleIds = new Set(nodes.map((node) => node.id));
+    const links = data.links.filter((link) => {
+      const source = typeof link.source === "string" ? link.source : link.source.id;
+      const target = typeof link.target === "string" ? link.target : link.target.id;
+      return visibleIds.has(source) && visibleIds.has(target);
+    });
+    return { nodes, links };
+  }, [activeCategories, data]);
 
   useEffect(() => {
     const element = wrapRef.current;
@@ -165,8 +268,21 @@ export function GraphView({
         distance?: (value: number | ((edge: SimLink) => number)) => unknown;
         strength?: (value: number | ((edge: SimLink) => number)) => unknown;
       } | undefined;
-      link?.distance?.((edge) => edge.kind === "shared-tag" ? 88 : 128);
-      link?.strength?.((edge) => edge.kind === "shared-tag" ? 0.08 : 0.2);
+      link?.distance?.((edge) => {
+        if (edge.kind === "topic-bridge") return 360;
+        if (edge.kind === "branch") {
+          const { source, target } = linkIds(edge);
+          const sourceRole = nodeById.get(source)?.role;
+          const targetRole = nodeById.get(target)?.role;
+          return sourceRole === "topic" || targetRole === "topic" ? 92 : 64;
+        }
+        return edge.kind === "shared-tag" ? 88 : 128;
+      });
+      link?.strength?.((edge) => {
+        if (edge.kind === "topic-bridge") return 0.035;
+        if (edge.kind === "branch") return 0.34;
+        return edge.kind === "shared-tag" ? 0.08 : 0.2;
+      });
 
       handle.d3Force?.("clusters", createClusterForce());
       handle.d3Force?.("collide", createCollisionForce(7));
@@ -174,7 +290,7 @@ export function GraphView({
     } catch {
       // The graph remains usable if a future force-graph release changes its internals.
     }
-  }, []);
+  }, [nodeById]);
 
   const zoomBy = useCallback((factor: number) => {
     const graph = graphRef.current;
@@ -185,22 +301,37 @@ export function GraphView({
 
   const activeId = hoveredId ?? focusedId ?? selectedId;
 
+  const graphNeighbours = useMemo(() => {
+    const neighbours = new Map<string, Set<string>>();
+    const link = (from: string, to: string) => {
+      const set = neighbours.get(from) ?? new Set<string>();
+      set.add(to);
+      neighbours.set(from, set);
+    };
+    for (const edge of visibleData.links) {
+      const { source, target } = linkIds(edge);
+      link(source, target);
+      link(target, source);
+    }
+    return neighbours;
+  }, [visibleData.links]);
+
   const highlight = useMemo(() => {
     if (!activeId) return null;
     return {
       id: activeId,
-      neighbours: index.neighbours.get(activeId) ?? new Set<string>(),
+      neighbours: graphNeighbours.get(activeId) ?? new Set<string>(),
     };
-  }, [activeId, index]);
+  }, [activeId, graphNeighbours]);
 
   const isDimmed = useCallback(
     (node: SimNode) => {
-      if (!activeCategories.has(node.category)) return true;
-      if (matchedIds && !matchedIds.has(node.id)) return true;
+      if (focusRequest && node.category !== focusRequest.category) return true;
+      if (matchedIds && node.role === "document" && !matchedIds.has(node.id)) return true;
       if (highlight && highlight.id !== node.id && !highlight.neighbours.has(node.id)) return true;
       return false;
     },
-    [activeCategories, matchedIds, highlight],
+    [focusRequest, matchedIds, highlight],
   );
 
   const paintNode = useCallback(
@@ -222,12 +353,36 @@ export function GraphView({
         ctx.fill();
       }
 
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
+      if (node.role === "topic") {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius + 6, 0, Math.PI * 2);
+        ctx.strokeStyle = `${color}70`;
+        ctx.lineWidth = 2.4 / scale;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, Math.max(4, node.radius * 0.26), 0, Math.PI * 2);
+        ctx.fillStyle = palette.surface;
+        ctx.fill();
+      } else if (node.role === "subtopic") {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fillStyle = palette.surface;
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3 / scale;
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
 
-      if (node.node.kind === "statute") {
+      if (node.role === "document" && node.node.kind === "statute") {
         // Legislation renders as a ring so it separates from case law at a glance.
         ctx.beginPath();
         ctx.arc(node.x, node.y, Math.max(1.4, node.radius - 2.4), 0, Math.PI * 2);
@@ -243,24 +398,33 @@ export function GraphView({
         ctx.stroke();
       }
 
-      const showLabel = scale > 1.35 || isActive || isSelected || node.node.degree >= 10;
+      const categoryFocused = focusRequest?.category === node.category;
+      const showLabel =
+        node.role === "topic" ||
+        (node.role === "subtopic" && (scale > 0.72 || categoryFocused || isActive)) ||
+        scale > 1.35 ||
+        isActive ||
+        isSelected ||
+        node.node.degree >= 10;
       if (showLabel && !dim) {
-        const fontSize = Math.max(9, 11 / scale);
-        ctx.font = `${isSelected ? 600 : 500} ${fontSize}px ${palette.fontSans}`;
+        const baseFontSize = node.role === "topic" ? 13 : node.role === "subtopic" ? 10.5 : 11;
+        const fontSize = Math.max(node.role === "topic" ? 10 : 8.5, baseFontSize / scale);
+        const fontWeight = node.role === "topic" ? 700 : node.role === "subtopic" ? 650 : isSelected ? 600 : 500;
+        ctx.font = `${fontWeight} ${fontSize}px ${palette.fontSans}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        const label = shortTitle(node.node.title);
-        const y = node.y + node.radius + 3.5;
-        ctx.lineWidth = 3 / scale;
+        const label = node.role === "document" ? shortTitle(node.node.title) : node.node.title;
+        const y = node.y + node.radius + (node.role === "topic" ? 7 : 4);
+        ctx.lineWidth = (node.role === "topic" ? 5 : 3) / scale;
         ctx.strokeStyle = palette.surface;
         ctx.strokeText(label, node.x, y);
-        ctx.fillStyle = isActive || isSelected ? palette.ink : palette.muted;
+        ctx.fillStyle = node.role === "topic" || isActive || isSelected ? palette.ink : palette.muted;
         ctx.fillText(label, node.x, y);
       }
 
       ctx.globalAlpha = 1;
     },
-    [focusedId, highlight, isDimmed, palette, selectedId],
+    [focusRequest?.category, focusedId, highlight, isDimmed, palette, selectedId],
   );
 
   const paintPointerArea = useCallback((node: SimNode, color: string, ctx: Canvas2D) => {
@@ -272,9 +436,7 @@ export function GraphView({
   }, []);
 
   const endpoints = useCallback((link: SimLink) => {
-    const source = typeof link.source === "string" ? link.source : link.source.id;
-    const target = typeof link.target === "string" ? link.target : link.target.id;
-    return { source, target };
+    return linkIds(link);
   }, []);
 
   const linkColor = useCallback(
@@ -284,15 +446,21 @@ export function GraphView({
         return palette.accent;
       }
       if (highlight) return palette.linkDim;
+      if (link.kind === "branch") {
+        const branchNode = nodeById.get(target) ?? nodeById.get(source);
+        return branchNode ? palette.category(branchNode.category) : palette.link;
+      }
       return link.kind === "shared-tag" ? palette.linkDim : palette.link;
     },
-    [endpoints, highlight, palette],
+    [endpoints, highlight, nodeById, palette],
   );
 
   const linkWidth = useCallback(
     (link: SimLink) => {
       const { source, target } = endpoints(link);
       if (highlight && (highlight.id === source || highlight.id === target)) return 1.8;
+      if (link.kind === "topic-bridge") return Math.min(2.2, 0.7 + Math.log2(link.weight + 1) * 0.25);
+      if (link.kind === "branch") return 1.05;
       return link.kind === "shared-tag" ? 0.5 : 0.9;
     },
     [endpoints, highlight],
@@ -383,13 +551,14 @@ export function GraphView({
           break;
         case "0":
           event.preventDefault();
+          onFocusCategory(null);
           graphRef.current?.zoomToFit(400, 70);
           break;
         default:
           break;
       }
     },
-    [focusNode, focusedId, onSelect, orderedNodes, selectedId, zoomBy],
+    [focusNode, focusedId, onFocusCategory, onSelect, orderedNodes, selectedId, zoomBy],
   );
 
   const handleEngineStop = useCallback(() => undefined, []);
@@ -403,6 +572,38 @@ export function GraphView({
     }, 900);
     return () => window.clearTimeout(timer);
   }, [size.width]);
+
+  useEffect(() => {
+    if (!focusRequest || size.width === 0 || size.height === 0) return;
+    const timer = window.setTimeout(() => {
+      const targets = visibleData.nodes.filter((node) => node.category === focusRequest.category);
+      const positioned = targets.filter(
+        (node): node is SimNode & { x: number; y: number } =>
+          node.x !== undefined && node.y !== undefined,
+      );
+      if (positioned.length === 0) return;
+      const xs = positioned.map((node) => node.x);
+      const ys = positioned.map((node) => node.y);
+      const left = Math.min(...xs);
+      const right = Math.max(...xs);
+      const top = Math.min(...ys);
+      const bottom = Math.max(...ys);
+      const centreX = (left + right) / 2;
+      const centreY = (top + bottom) / 2;
+      const zoom = Math.max(
+        0.55,
+        Math.min(2.5, Math.min(size.width / Math.max(220, right - left + 170), size.height / Math.max(180, bottom - top + 150)) * 0.88),
+      );
+      graphRef.current?.centerAt(centreX, centreY, 520);
+      graphRef.current?.zoom(zoom, 520);
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [focusRequest, size.height, size.width, visibleData.nodes]);
+
+  const fitAll = useCallback(() => {
+    onFocusCategory(null);
+    graphRef.current?.zoomToFit(400, 70);
+  }, [onFocusCategory]);
 
   const tooltipNode = activeId ? index.docsById.get(activeId) : null;
   const tooltipPosition = tooltipAnchor === "node" ? anchoredTooltipPosition : pointer;
@@ -428,7 +629,7 @@ export function GraphView({
       >
         {size.width > 0 && size.height > 0 ? (
           <ForceGraphClient
-            graphData={data}
+            graphData={visibleData}
             width={size.width}
             height={size.height}
             nodeVal={nodeVal}
@@ -444,7 +645,8 @@ export function GraphView({
             }}
             onNodeClick={(node) => {
               setFocusedId(node.id);
-              onSelect(node.id);
+              if (node.role === "document") onSelect(node.id);
+              else onFocusCategory(node.category);
             }}
             onBackgroundClick={() => setFocusedId(null)}
             onEngineStop={handleEngineStop}
@@ -471,7 +673,7 @@ export function GraphView({
           <IconButton
             label="Fit graph to view"
             size="sm"
-            onClick={() => graphRef.current?.zoomToFit(400, 70)}
+            onClick={fitAll}
           >
             <Maximize2 className="size-4" />
           </IconButton>
@@ -659,6 +861,54 @@ function hashUnit(value: string): number {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0) / 4294967295;
+}
+
+function slugId(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function subtopicOf(node: GraphNode): string {
+  const category = categoryOf(node.categoryPath);
+  const raw = node.categoryPath[1]?.trim();
+  if (!raw || raw.toLowerCase() === category.toLowerCase()) return "General";
+  const concise = raw.split(/\s+[—–]\s+|\s*\|\s*/)[0].replace(/\]—\[/g, " — ").trim();
+  return concise.length > 34 ? `${concise.slice(0, 33)}…` : concise;
+}
+
+function makeGuideNode(
+  id: string,
+  title: string,
+  category: string,
+  count: number,
+  role: "topic" | "subtopic",
+): GraphNode {
+  return {
+    id,
+    title,
+    citation: `${count} file${count === 1 ? "" : "s"}`,
+    court: "Atlas",
+    year: 0,
+    categoryPath: role === "topic" ? [category] : [category, title],
+    tags: [slugId(category), slugId(title)],
+    summary:
+      role === "topic"
+        ? `A navigational hub for ${count} files in ${category}.`
+        : `${count} files grouped under ${title} within ${category}.`,
+    relatedIds: [],
+    kind: "overview",
+    degree: count,
+  };
+}
+
+function pairKey(left: string, right: string): string {
+  return left < right ? `${left}\u0000${right}` : `${right}\u0000${left}`;
+}
+
+function linkIds(link: SimLink): { source: string; target: string } {
+  return {
+    source: typeof link.source === "string" ? link.source : link.source.id,
+    target: typeof link.target === "string" ? link.target : link.target.id,
+  };
 }
 
 type AtlasForce = ((alpha: number) => void) & { initialize: (nodes: SimNode[]) => void };

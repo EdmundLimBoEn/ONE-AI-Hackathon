@@ -49,6 +49,7 @@ export function AtlasWorkspace() {
   const [docError, setDocError] = useState<string | null>(null);
 
   const [activeCategories, setActiveCategories] = useState<Set<string>>(new Set());
+  const [categoryFocus, setCategoryFocus] = useState<{ category: string; sequence: number } | null>(null);
   const [railOpen, setRailOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
 
@@ -169,8 +170,26 @@ export function AtlasWorkspace() {
     setRailOpen(false);
   }, []);
 
-  const toggleCategory = useCallback(
+  const focusCategory = useCallback((category: string | null) => {
+    if (!category) {
+      setCategoryFocus(null);
+      return;
+    }
+    setView("graph");
+    setSelectedId(null);
+    setQuery("");
+    setActiveCategories((current) => new Set(current).add(category));
+    setCategoryFocus((current) => ({
+      category,
+      sequence: (current?.sequence ?? 0) + 1,
+    }));
+    setRailOpen(false);
+  }, []);
+
+  const toggleCategoryVisibility = useCallback(
     (category: string) => {
+      const hiding = activeCategories.has(category);
+      if (hiding && categoryFocus?.category === category) setCategoryFocus(null);
       setActiveCategories((current) => {
         const next = new Set(current);
         if (next.has(category)) next.delete(category);
@@ -182,12 +201,13 @@ export function AtlasWorkspace() {
         return next;
       });
     },
-    [index],
+    [activeCategories, categoryFocus?.category, index],
   );
 
   const resetCategories = useCallback(() => {
     if (!index) return;
     setActiveCategories(new Set(index.graph.nodes.map((node) => categoryOf(node.categoryPath))));
+    setCategoryFocus(null);
   }, [index]);
 
   const askAbout = useCallback((target: AtlasDoc) => {
@@ -256,7 +276,9 @@ export function AtlasWorkspace() {
             selectedId={selectedId}
             onSelect={openDoc}
             activeCategories={activeCategories}
-            onToggleCategory={toggleCategory}
+            focusedCategory={categoryFocus?.category ?? null}
+            onFocusCategory={focusCategory}
+            onToggleCategoryVisibility={toggleCategoryVisibility}
             onResetCategories={resetCategories}
             searchRef={searchRef}
           />
@@ -270,6 +292,8 @@ export function AtlasWorkspace() {
                 selectedId={selectedId}
                 onSelect={openDoc}
                 activeCategories={activeCategories}
+                focusRequest={categoryFocus}
+                onFocusCategory={focusCategory}
                 matchedIds={matchedIds}
                 theme={theme}
               />
