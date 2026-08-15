@@ -27,14 +27,17 @@ describe("RAG prompt helpers", () => {
 
   test("includes source identity and guards against invented authorities", () => {
     const messages = buildRagMessages("What is the duty test?", [source]);
-    expect(messages[0].content).toContain("do not invent authorities");
+    expect(messages[0].content).toContain("Do not invent authorities");
+    expect(messages[0].content).toContain("not a human");
+    expect(messages[0].content).toContain("[[Document ID|short label]]");
     expect(messages[0].content).toContain("What it is");
     expect(messages[0].content).toContain("How it is applicable to our case");
     expect(messages[0].content).toContain("How it will be used");
     expect(messages[0].content).toContain("Precedents set");
     expect(messages[0].content).toBe(DEFAULT_RAG_SYSTEM_PROMPT);
     expect(messages[1].content).toContain("Document ID: spandeck-v-dsta-2007");
-    expect(messages[1].content).toContain("[Spandeck Engineering v DSTA [2007] SGCA 37]");
+    expect(messages[1].content).toContain("[[spandeck-v-dsta-2007|");
+    expect(messages[1].content).toContain("Wikilink (use this form in your answer)");
     expect(messages[1].content).toContain("paper to analyse");
   });
 

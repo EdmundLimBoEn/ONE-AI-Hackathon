@@ -79,8 +79,13 @@ function handleChunk(chunk: string, handlers: StreamHandlers): void {
       const parsed: unknown = JSON.parse(trimmed);
       const citations = readCitations(parsed);
       if (citations) handlers.onCitations(citations);
+      // Ignore pure metadata frames (sources list) so they are not painted as text.
       const delta = readDelta(parsed);
       if (delta) handlers.onDelta(delta);
+      else if (citations) return;
+      else if (isRecord(parsed) && (parsed.sources || parsed.citations || parsed.type === "metadata")) {
+        return;
+      }
       return;
     } catch {
       // Not JSON after all — fall through and treat it as text.

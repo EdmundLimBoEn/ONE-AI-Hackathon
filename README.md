@@ -81,10 +81,10 @@ Checked-in fixtures plus the bundled written-law corpus power browsing, search, 
 1. Open **Ask the atlas** (⌘J / chat dock).
 2. Click the **gear** icon in the chat header.
 3. Edit the **Model system prompt** textarea.
-4. Changes persist in `localStorage` (`sla-rag-system-prompt`) and are sent as `systemPrompt` on each `/api/chat` request.
+4. Changes persist in `localStorage` (`sla-rag-system-prompt-v2`) and are sent as `systemPrompt` on each `/api/chat` request.
 5. **Reset** restores `DEFAULT_RAG_SYSTEM_PROMPT` from `src/lib/server/prompts.ts`.
 
-Default prompt behaviour: statute-first answers, paper-analysis framework (what it is / applicability / use / precedents), no invented authorities, citation brackets from sources only.
+Default prompt behaviour: non-sycophantic / non-human tone, statute-first answers, paper-analysis framework (what it is / applicability / use / precedents), no invented authorities, and **inline `[[docId|label]]` wikilinks** so every mid-answer cite opens the paper (not only the footer chips). The client also linkifies bare neutral citations such as `[2007] SGCA 37` when the model forgets the wikilink form.
 
 ## Corpus pipeline
 

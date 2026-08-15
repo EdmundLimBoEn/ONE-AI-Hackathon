@@ -7,6 +7,7 @@ import { ExternalLink, Link2Off } from "lucide-react";
 import type { AtlasIndex } from "./lib/atlas-data";
 import { resolveWikilink } from "./lib/atlas-data";
 import { categoryColor, categoryOf } from "./lib/categories";
+import { linkifyAtlasCitations } from "./lib/linkify-citations";
 
 const WIKILINK = /\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
 const SCHEME = "wikilink:";
@@ -23,12 +24,18 @@ export function MarkdownView({
   content,
   index,
   onOpenDoc,
+  linkifyCitations = false,
 }: {
   content: string;
   index: AtlasIndex;
   onOpenDoc: (id: string) => void;
+  /** When true, turn neutral cites / titles in model answers into openable wikilinks. */
+  linkifyCitations?: boolean;
 }) {
-  const source = useMemo(() => encodeWikilinks(content), [content]);
+  const source = useMemo(() => {
+    const prepared = linkifyCitations ? linkifyAtlasCitations(content, index) : content;
+    return encodeWikilinks(prepared);
+  }, [content, index, linkifyCitations]);
 
   const components = useMemo<Components>(
     () => ({

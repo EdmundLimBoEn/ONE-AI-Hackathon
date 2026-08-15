@@ -10,8 +10,17 @@ export function localChatText(query: string, sources: SearchResult[]): string {
   if (!sources.length) {
     return "No matching local authorities were found. Connect the Cloudflare and OpenRouter bindings for corpus-backed analysis.";
   }
-  const citations = sources.map((source) => `[${source.title} ${source.citation}]`).join("; ");
-  return `Local preview mode found authorities relevant to “${query}”: ${citations}. Connect OpenRouter for a synthesized answer. This is legal information, not legal advice.`;
+  const bullets = sources
+    .map(
+      (source) =>
+        `- [[${source.docId}|${source.title}]] ${source.citation ? `(${source.citation})` : ""} — ${source.excerpt.slice(0, 160)}${source.excerpt.length > 160 ? "…" : ""}`,
+    )
+    .join("\n");
+  return (
+    `Local preview for “${query}” (retrieval only — not a model synthesis).\n\n` +
+    `**Authorities at a glance**\n\n${bullets}\n\n` +
+    `Open any wikilink above to read the paper. Connect OpenRouter for a full analytical answer. This is legal information, not legal advice.`
+  );
 }
 
 export function createSseChatStream(

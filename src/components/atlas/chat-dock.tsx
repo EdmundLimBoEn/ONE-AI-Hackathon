@@ -16,6 +16,7 @@ import {
 import { DEFAULT_RAG_SYSTEM_PROMPT } from "@/lib/server/prompts";
 import type { AtlasIndex } from "./lib/atlas-data";
 import { localAnswer, streamChat, type ChatCitation, type ChatMessage } from "./lib/chat";
+import { extractCitedDocIds } from "./lib/linkify-citations";
 import { MarkdownView } from "./markdown-view";
 import { cn } from "@/components/ui/cn";
 
@@ -26,7 +27,9 @@ const SUGGESTIONS = [
   "What duties does the Workplace Safety and Health Act impose on employers?",
 ];
 
-const PROMPT_STORAGE_KEY = "sla-rag-system-prompt";
+// Bump when the default system prompt changes so local tweaks of the old
+// default do not permanently hide the improved citation instructions.
+const PROMPT_STORAGE_KEY = "sla-rag-system-prompt-v2";
 
 let messageCounter = 0;
 const nextId = () => `m${++messageCounter}`;
@@ -124,7 +127,10 @@ export function ChatDock({
       const onDelta = (text: string) =>
         update((message) => ({ ...message, content: message.content + text }));
       const onCitations = (citations: ChatCitation[]) =>
-        update((message) => ({ ...message, citations }));
+        update((message) => ({
+          ...message,
+          citations: mergeCitations(message.citations, citations),
+        }));
 
       try {
         const served = await streamChat({
@@ -142,6 +148,18 @@ export function ChatDock({
             onDelta,
             onCitations,
             signal: controller.signal,
+          });
+        }
+
+        // Harvest any inline [[docId]] / neutral cites the model put in the body
+        // so the footer chips always match what is clickable mid-answer.
+        if (!controller.signal.aborted) {
+          update((message) => {
+            const fromBody = citationsFromContent(message.content, index);
+            return {
+              ...message,
+              citations: mergeCitations(message.citations, fromBody),
+            };
           });
         }
       } finally {
@@ -428,28 +446,67 @@ function ChatBubble({
         </p>
       ) : (
         <div className="text-[13px] [&_.prose-legal]:text-[13px] [&_.prose-legal]:leading-relaxed [&_.prose-legal_h2]:text-sm [&_.prose-legal_h3]:text-[13px]">
-          <MarkdownView content={message.content} index={index} onOpenDoc={onOpenDoc} />
+          <MarkdownView
+            content={message.content}
+            index={index}
+            onOpenDoc={onOpenDoc}
+            linkifyCitations
+          />
         </div>
       )}
       {message.citations && message.citations.length > 0 ? (
-        <ul className="mt-2 flex flex-wrap gap-1.5">
-          {message.citations.map((citation) => (
-            <li key={citation.docId}>
-              <button
-                type="button"
-                onClick={() => onOpenDoc(citation.docId)}
-                title={citation.title}
-                className="inline-flex max-w-52 items-center gap-1 truncate rounded-full border border-line bg-sunken px-2 py-0.5 text-[10.5px] text-muted transition-colors hover:border-accent-line hover:text-ink"
-              >
-                <span className="truncate">{citation.title}</span>
-                {citation.citation ? (
-                  <span className="shrink-0 font-mono text-faint">{citation.citation}</span>
-                ) : null}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-2">
+          <p className="mb-1 text-[10px] font-medium tracking-wide text-faint uppercase">
+            Open cited papers
+          </p>
+          <ul className="flex flex-wrap gap-1.5">
+            {message.citations.map((citation) => (
+              <li key={citation.docId}>
+                <button
+                  type="button"
+                  onClick={() => onOpenDoc(citation.docId)}
+                  title={citation.title}
+                  className="inline-flex max-w-56 items-center gap-1 truncate rounded-full border border-line bg-sunken px-2 py-0.5 text-[10.5px] text-muted transition-colors hover:border-accent-line hover:text-ink"
+                >
+                  <span className="truncate">{citation.title}</span>
+                  {citation.citation ? (
+                    <span className="shrink-0 font-mono text-faint">{citation.citation}</span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </div>
   );
+}
+
+function mergeCitations(
+  existing: ChatCitation[] | undefined,
+  incoming: ChatCitation[],
+): ChatCitation[] {
+  const map = new Map<string, ChatCitation>();
+  for (const item of existing ?? []) map.set(item.docId, item);
+  for (const item of incoming) {
+    if (!item.docId) continue;
+    const prior = map.get(item.docId);
+    map.set(item.docId, {
+      docId: item.docId,
+      title: item.title || prior?.title || item.docId,
+      citation: item.citation || prior?.citation || "",
+    });
+  }
+  return [...map.values()];
+}
+
+function citationsFromContent(content: string, index: AtlasIndex): ChatCitation[] {
+  return extractCitedDocIds(content, index).map((docId) => {
+    const node = index.docsById.get(docId);
+    return {
+      docId,
+      title: node?.title ?? docId,
+      citation: node?.citation ?? "",
+    };
+  });
 }
