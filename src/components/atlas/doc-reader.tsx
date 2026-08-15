@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
+  BookOpenText,
+  ChevronDown,
   Gavel,
   MessageSquareQuote,
   PanelRightClose,
@@ -39,10 +41,13 @@ export function DocReader({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const fullTextId = useId();
+  const [showFullText, setShowFullText] = useState(false);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
     headingRef.current?.focus({ preventScroll: true });
+    setShowFullText(false);
   }, [doc?.meta.id]);
 
   const category = useMemo(
@@ -159,23 +164,51 @@ export function DocReader({
           </div>
         ) : doc ? (
           <article className="mx-auto max-w-[68ch] px-4 py-6 sm:px-6">
-            {doc.meta.summary ? (
-              <p className="mb-6 border-l-2 border-accent-line pl-3 text-[13.5px] leading-relaxed text-muted italic">
-                {doc.meta.summary}
-              </p>
-            ) : null}
-            <MarkdownView content={doc.content} index={index} onOpenDoc={onOpenDoc} />
-            {doc.meta.sourceUrl ? (
-              <a
-                href={doc.meta.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-8 inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-2 text-xs font-medium text-muted transition-colors hover:border-accent-line hover:text-ink"
+            <section className="overflow-hidden rounded-lg border border-line bg-sunken/45">
+              {doc.meta.summary ? (
+                <div className="border-l-2 border-accent-line px-4 py-3.5">
+                  <p className="eyebrow mb-1.5">Summary</p>
+                  <p className="text-[13.5px] leading-relaxed text-muted">{doc.meta.summary}</p>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                aria-expanded={showFullText}
+                aria-controls={fullTextId}
+                onClick={() => setShowFullText((current) => !current)}
+                className="flex w-full items-center gap-2 border-t border-line px-4 py-3 text-left text-xs font-semibold text-ink transition-colors hover:bg-raised focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
               >
-                <Scale aria-hidden className="size-3.5" />
-                Read the authoritative text
-                <ArrowUpRight aria-hidden className="size-3.5" />
-              </a>
+                <BookOpenText aria-hidden className="size-4 text-accent" />
+                <span className="flex-1">
+                  {showFullText ? "Hide full document" : "View full document"}
+                </span>
+                <ChevronDown
+                  aria-hidden
+                  className={cn("size-4 text-faint transition-transform", showFullText && "rotate-180")}
+                />
+              </button>
+            </section>
+
+            {showFullText ? (
+              <div id={fullTextId} className="mt-7 animate-fade-up">
+                <div className="mb-5 flex items-center gap-3 border-b border-line pb-2">
+                  <span className="eyebrow">Full document</span>
+                  <span className="h-px flex-1 bg-line" />
+                </div>
+                <MarkdownView content={doc.content} index={index} onOpenDoc={onOpenDoc} />
+                {doc.meta.sourceUrl ? (
+                  <a
+                    href={doc.meta.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-8 inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-2 text-xs font-medium text-muted transition-colors hover:border-accent-line hover:text-ink"
+                  >
+                    <Scale aria-hidden className="size-3.5" />
+                    Read the authoritative text
+                    <ArrowUpRight aria-hidden className="size-3.5" />
+                  </a>
+                ) : null}
+              </div>
             ) : null}
           </article>
         ) : null}

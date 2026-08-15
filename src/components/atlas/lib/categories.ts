@@ -39,6 +39,26 @@ export function categoryOf(categoryPath: string[] | undefined): string {
   return categoryPath?.[0]?.trim() || "Uncategorised";
 }
 
+export function legalDomainOf(category: string): string {
+  const key = category.toLowerCase();
+  if (key.includes("criminal")) return "Criminal justice";
+  if (key.includes("constitutional") || key.includes("administrative")) return "Public law";
+  if (key.includes("statute") || key.includes("legislation")) return "Legislation";
+  if (
+    key.includes("civil") ||
+    key.includes("commercial") ||
+    key.includes("contract") ||
+    key.includes("family") ||
+    key.includes("property") ||
+    key.includes("employment") ||
+    key.includes("intellectual") ||
+    key.includes("tort")
+  ) {
+    return "Civil law";
+  }
+  return "Other law";
+}
+
 /** Stable CSS custom property for a top-level category, hashed when unknown. */
 export function categoryVar(category: string): string {
   const known = CATEGORY_VARS[category.toLowerCase()];

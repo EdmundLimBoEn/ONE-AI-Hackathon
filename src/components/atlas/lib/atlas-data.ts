@@ -8,6 +8,7 @@ import type {
 import fixtureGraph from "@/fixtures/graph.json";
 import fixtureTree from "@/fixtures/tree.json";
 import { DEMO_DOCS, type DemoDoc } from "./demo-corpus";
+import { legalDomainOf } from "./categories";
 
 export type DataSource = "live" | "fixture" | "demo";
 
@@ -170,6 +171,13 @@ function countDocuments(node: TreeNode): number {
   return (node.children ?? []).reduce((sum, c) => sum + countDocuments(c), 0);
 }
 
+function hasLegalDomainLayer(tree: TreeNode): boolean {
+  const domains = new Set(["Civil law", "Criminal justice", "Public law", "Legislation", "Other law"]);
+  return (tree.children ?? []).some(
+    (child) => child.type === "folder" && domains.has(child.name),
+  );
+}
+
 /** Derives related + shared-tag edges so a bare document list still renders a graph. */
 export function buildGraph(docs: DocMeta[]): GraphData {
   const ids = new Set(docs.map((d) => d.id));
@@ -231,18 +239,19 @@ export function buildTree(docs: DocMeta[], rootName = "Singapore Law Atlas"): Tr
   const root: TreeNode = { id: "root", name: rootName, type: "folder", path: [], children: [] };
 
   for (const doc of docs) {
-    const segments = doc.categoryPath.length > 0 ? doc.categoryPath : ["Uncategorised"];
+    const categorySegments = doc.categoryPath.length > 0 ? doc.categoryPath : ["Uncategorised"];
+    const segments = [legalDomainOf(categorySegments[0]), ...categorySegments];
     let cursor = root;
     const path: string[] = [];
     for (const segment of segments) {
       path.push(segment);
-      const slug = path.join("/").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const folderId = `folder:${path.map((part) => encodeURIComponent(part)).join("/")}`;
       cursor.children ??= [];
       let next = cursor.children.find(
         (child) => child.type === "folder" && child.name === segment,
       );
       if (!next) {
-        next = { id: slug, name: segment, type: "folder", path: [...path], children: [] };
+        next = { id: folderId, name: segment, type: "folder", path: [...path], children: [] };
         cursor.children.push(next);
       }
       cursor = next;
@@ -326,7 +335,7 @@ export async function loadIndex(): Promise<AtlasIndex> {
 
   let tree = source === "live" ? normalizeTree(treeRaw) : null;
   if (!tree && source === "fixture") tree = normalizeTree(fixtureTree);
-  if (!tree || countDocuments(tree) < graph.nodes.length) {
+  if (!tree || countDocuments(tree) < graph.nodes.length || !hasLegalDomainLayer(tree)) {
     tree = buildTree(graph.nodes);
   }
 
