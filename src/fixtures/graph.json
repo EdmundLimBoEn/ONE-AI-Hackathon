@@ -1,0 +1,34 @@
+{
+  "generatedAt": "2026-08-15T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "spandeck-v-dsta-2007",
+      "title": "Spandeck Engineering (S) Pte Ltd v Defence Science & Technology Agency",
+      "citation": "[2007] SGCA 37",
+      "court": "SGCA",
+      "year": 2007,
+      "categoryPath": ["Civil Liability", "Negligence", "Duty of Care"],
+      "tags": ["negligence", "duty-of-care", "pure-economic-loss"],
+      "summary": "The Court of Appeal established Singapore's unified two-stage test for a duty of care, preceded by a threshold requirement of factual foreseeability.",
+      "relatedIds": ["ngiam-kong-seng-2008"],
+      "sourceUrl": "https://www.elitigation.sg/gd/s/2007_SGCA_37",
+      "kind": "judgment",
+      "degree": 4
+    },
+    {
+      "id": "ngiam-kong-seng-2008",
+      "title": "Ngiam Kong Seng v Lim Chiew Hock",
+      "citation": "[2008] SGCA 23",
+      "court": "SGCA",
+      "year": 2008,
+      "categoryPath": ["Civil Liability", "Negligence", "Duty of Care"],
+      "tags": ["negligence", "duty-of-care", "personal-injury"],
+      "summary": "The court applied the Spandeck framework in a personal injury setting and examined proximity and policy considerations.",
+      "relatedIds": ["spandeck-v-dsta-2007"],
+      "sourceUrl": "https://www.elitigation.sg/gd/s/2008_SGCA_23",
+      "kind": "judgment",
+      "degree": 2
+    }
+  ],
+  "edges": [{ "source": "spandeck-v-dsta-2007", "target": "ngiam-kong-seng-2008", "kind": "related", "weight": 1 }]
+}

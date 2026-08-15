@@ -1,0 +1,25 @@
+{
+  "id": "root",
+  "name": "Singapore Law Atlas",
+  "type": "folder",
+  "path": [],
+  "children": [{
+    "id": "civil-liability",
+    "name": "Civil Liability",
+    "type": "folder",
+    "path": ["Civil Liability"],
+    "children": [{
+      "id": "negligence",
+      "name": "Negligence",
+      "type": "folder",
+      "path": ["Civil Liability", "Negligence"],
+      "children": [{
+        "id": "spandeck-v-dsta-2007",
+        "name": "Spandeck v DSTA",
+        "type": "document",
+        "path": ["Civil Liability", "Negligence", "Spandeck v DSTA"],
+        "docId": "spandeck-v-dsta-2007"
+      }]
+    }]
+  }]
+}
