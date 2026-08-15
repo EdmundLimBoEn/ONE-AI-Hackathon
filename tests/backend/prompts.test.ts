@@ -41,11 +41,6 @@ describe("RAG prompt helpers", () => {
     expect(messages[1].content).toContain("paper to analyse");
   });
 
-  test("accepts a custom system prompt override for live tweaking", () => {
-    const custom = "You are a terse Singapore statutory research bot. Cite sections only.";
-    const messages = buildRagMessages("Explain s 304A", [source], custom);
-    expect(messages[0].content).toBe(custom);
-  });
 });
 
 describe("model JSON parsing", () => {

@@ -19,7 +19,7 @@ export async function POST(request: Request): Promise<Response> {
     const runtime = getServerRuntime();
     await enforceRateLimit(request, runtime.env);
     const sources = await retrieve(runtime.env, input.query, input.topK);
-    const messages = buildRagMessages(input.query, sources, input.systemPrompt);
+    const messages = buildRagMessages(input.query, sources);
     const providerText = runtime.openRouterKey
       ? await completeText(runtime.openRouterKey, messages, {
           maxTokens: 1_200,

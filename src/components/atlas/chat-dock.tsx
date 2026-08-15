@@ -3,17 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
-  ChevronDown,
   MessagesSquare,
   Minimize2,
-  RotateCcw,
-  Settings2,
   Sparkles,
   Square,
   WifiOff,
   X,
 } from "lucide-react";
-import { DEFAULT_RAG_SYSTEM_PROMPT } from "@/lib/server/prompts";
 import type { AtlasIndex } from "./lib/atlas-data";
 import { localAnswer, streamChat, type ChatCitation, type ChatMessage } from "./lib/chat";
 import { extractCitedDocIds } from "./lib/linkify-citations";
@@ -26,10 +22,6 @@ const SUGGESTIONS = [
   "How are matrimonial assets divided under s 112 of the Women's Charter?",
   "What duties does the Workplace Safety and Health Act impose on employers?",
 ];
-
-// Bump when the default system prompt changes so local tweaks of the old
-// default do not permanently hide the improved citation instructions.
-const PROMPT_STORAGE_KEY = "sla-rag-system-prompt-v2";
 
 let messageCounter = 0;
 const nextId = () => `m${++messageCounter}`;
@@ -56,35 +48,11 @@ export function ChatDock({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_RAG_SYSTEM_PROMPT);
-  const [promptOpen, setPromptOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const contextDoc = contextDocId ? index.docsById.get(contextDocId) : null;
-  const promptTweaked = systemPrompt.trim() !== DEFAULT_RAG_SYSTEM_PROMPT.trim();
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(PROMPT_STORAGE_KEY);
-      if (saved && saved.trim().length >= 20) setSystemPrompt(saved);
-    } catch {
-      // ignore private-mode storage failures
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      if (systemPrompt.trim() === DEFAULT_RAG_SYSTEM_PROMPT.trim()) {
-        localStorage.removeItem(PROMPT_STORAGE_KEY);
-      } else {
-        localStorage.setItem(PROMPT_STORAGE_KEY, systemPrompt);
-      }
-    } catch {
-      // ignore
-    }
-  }, [systemPrompt]);
 
   useEffect(() => {
     if (!open) return;
@@ -136,7 +104,6 @@ export function ChatDock({
         const served = await streamChat({
           messages: history,
           docId: contextDocId,
-          systemPrompt: promptTweaked ? systemPrompt : undefined,
           signal: controller.signal,
           onDelta,
           onCitations,
@@ -167,7 +134,7 @@ export function ChatDock({
         abortRef.current = null;
       }
     },
-    [contextDocId, index, messages, promptTweaked, streaming, systemPrompt],
+    [contextDocId, index, messages, streaming],
   );
 
   useEffect(() => {
@@ -222,21 +189,6 @@ export function ChatDock({
         </div>
         <button
           type="button"
-          aria-expanded={promptOpen}
-          onClick={() => setPromptOpen((current) => !current)}
-          title="View or edit the model system prompt"
-          className={cn(
-            "rounded-md p-1.5 transition-colors",
-            promptOpen || promptTweaked
-              ? "bg-accent-wash text-ink"
-              : "text-faint hover:bg-sunken hover:text-ink",
-          )}
-        >
-          <Settings2 aria-hidden className="size-4" />
-          <span className="sr-only">Model system prompt</span>
-        </button>
-        <button
-          type="button"
           onClick={() => onOpenChange(false)}
           className="rounded-md p-1.5 text-faint transition-colors hover:bg-sunken hover:text-ink"
         >
@@ -244,53 +196,6 @@ export function ChatDock({
           <span className="sr-only">Minimise chat</span>
         </button>
       </header>
-
-      {promptOpen ? (
-        <div className="border-b border-line bg-sunken/70 px-3 py-2.5">
-          <div className="mb-1.5 flex items-center gap-2">
-            <p className="eyebrow flex-1">Model system prompt</p>
-            {promptTweaked ? (
-              <span className="rounded-full border border-accent-line bg-accent-wash px-1.5 py-0.5 text-[10px] font-medium text-ink">
-                custom
-              </span>
-            ) : (
-              <span className="text-[10px] text-faint">default</span>
-            )}
-            <button
-              type="button"
-              onClick={() => setSystemPrompt(DEFAULT_RAG_SYSTEM_PROMPT)}
-              disabled={!promptTweaked}
-              className="inline-flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-[10.5px] text-muted transition-colors hover:bg-raised hover:text-ink disabled:opacity-40"
-            >
-              <RotateCcw aria-hidden className="size-3" />
-              Reset
-            </button>
-            <button
-              type="button"
-              onClick={() => setPromptOpen(false)}
-              className="rounded p-0.5 text-faint hover:text-ink"
-            >
-              <ChevronDown aria-hidden className="size-3.5" />
-              <span className="sr-only">Collapse prompt editor</span>
-            </button>
-          </div>
-          <label htmlFor="atlas-system-prompt" className="sr-only">
-            System prompt sent to the model
-          </label>
-          <textarea
-            id="atlas-system-prompt"
-            value={systemPrompt}
-            onChange={(event) => setSystemPrompt(event.target.value)}
-            rows={8}
-            spellCheck={false}
-            className="w-full resize-y rounded-md border border-line bg-panel px-2 py-1.5 font-mono text-[11px] leading-relaxed text-ink placeholder:text-faint focus:border-accent-line focus:outline-none"
-          />
-          <p className="mt-1.5 text-[10.5px] leading-snug text-faint">
-            This is the system instruction for Atlas counsel. Edits are saved in this browser and
-            sent with each question. Source documents are still attached separately.
-          </p>
-        </div>
-      ) : null}
 
       {contextDoc ? (
         <div className="flex items-center gap-1.5 border-b border-line bg-sunken px-3 py-1.5">

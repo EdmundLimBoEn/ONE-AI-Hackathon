@@ -26,7 +26,6 @@ export interface StreamHandlers {
 interface StreamOptions extends StreamHandlers {
   messages: { role: ChatRole; content: string }[];
   docId?: string | null;
-  systemPrompt?: string;
   signal: AbortSignal;
 }
 
@@ -99,7 +98,7 @@ function handleChunk(chunk: string, handlers: StreamHandlers): void {
  * because the answer service may be swapped underneath us.
  */
 export async function streamChat(options: StreamOptions): Promise<boolean> {
-  const { messages, docId, systemPrompt, signal, onDelta, onCitations } = options;
+  const { messages, docId, signal, onDelta, onCitations } = options;
   let response: Response;
   try {
     response = await fetch("/api/chat", {
@@ -109,7 +108,6 @@ export async function streamChat(options: StreamOptions): Promise<boolean> {
         messages,
         docId,
         docIds: docId ? [docId] : [],
-        ...(systemPrompt ? { systemPrompt } : {}),
       }),
       signal,
     });

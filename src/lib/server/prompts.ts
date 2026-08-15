@@ -50,7 +50,7 @@ const PAPER_ANALYSIS_FRAMEWORK = [
 ].join(" ");
 
 /**
- * Default RAG system prompt — also shown in the atlas UI for live tweaking.
+ * Fixed RAG system prompt for Atlas counsel (lawyer-facing product — not user-editable).
  * Inline cites must use [[docId|label]] so the chat renderer can open the paper.
  */
 export const DEFAULT_RAG_SYSTEM_PROMPT = [
@@ -66,15 +66,11 @@ export const DEFAULT_RAG_SYSTEM_PROMPT = [
   "End with a short 'Authorities at a glance' bullet list. Each bullet must start with a [[Document ID|label]] wikilink, then one line on what the paper is and the usable section or holding.",
 ].join(" ");
 
-export function buildRagMessages(
-  query: string,
-  sources: SearchResult[],
-  systemPrompt = DEFAULT_RAG_SYSTEM_PROMPT,
-): ChatMessage[] {
+export function buildRagMessages(query: string, sources: SearchResult[]): ChatMessage[] {
   return [
     {
       role: "system",
-      content: systemPrompt.trim() || DEFAULT_RAG_SYSTEM_PROMPT,
+      content: DEFAULT_RAG_SYSTEM_PROMPT,
     },
     {
       role: "user",
