@@ -41,4 +41,16 @@ describe("API input validation", () => {
     expect(() => validateSearchInput({ query: "test", topK: 21 })).toThrow(ApiError);
     expect(() => validateDepositionInput({ text: "too short" })).toThrow(ApiError);
   });
+
+  test("treats missing deposition consent as false and rejects non-booleans", () => {
+    const longEnough = "x".repeat(40);
+    expect(validateDepositionInput({ text: longEnough }).externalProcessingConsent).toBe(false);
+    expect(
+      validateDepositionInput({ text: longEnough, externalProcessingConsent: true })
+        .externalProcessingConsent,
+    ).toBe(true);
+    expect(() =>
+      validateDepositionInput({ text: longEnough, externalProcessingConsent: "yes" }),
+    ).toThrow(ApiError);
+  });
 });

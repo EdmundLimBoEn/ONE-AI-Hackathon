@@ -1,3 +1,4 @@
+import { COMPLETION_UNITS, createAiBudget } from "@/lib/server/ai-budget";
 import { errorResponse } from "@/lib/server/errors";
 import { completeText } from "@/lib/server/openrouter";
 import { buildRagMessages } from "@/lib/server/prompts";
@@ -18,13 +19,15 @@ export async function POST(request: Request): Promise<Response> {
     const input = validateChatInput(await parseJsonBody(request, 16_384));
     const runtime = getServerRuntime();
     await enforceRateLimit(request, runtime.env);
-    const sources = await retrieve(runtime.env, input.query, input.topK);
+    const budget = await createAiBudget(runtime.env);
+    const sources = await retrieve(runtime.env, input.query, input.topK, budget);
     const messages = buildRagMessages(input.query, sources);
-    const providerText = runtime.openRouterKey
-      ? await completeText(runtime.openRouterKey, messages, {
-          maxTokens: 1_200,
-        })
-      : null;
+    const providerText =
+      runtime.openRouterKey && (await budget.consume(COMPLETION_UNITS))
+        ? await completeText(runtime.openRouterKey, messages, {
+            maxTokens: 1_200,
+          })
+        : null;
     const stream = createSseChatStream(
       providerText ?? localChatText(input.query, sources),
       sources,

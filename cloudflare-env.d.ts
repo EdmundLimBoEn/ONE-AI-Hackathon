@@ -7,6 +7,8 @@ interface __BaseEnv_CloudflareEnv {
 	LAW_CORPUS: VectorizeIndex;
 	AI_RATE_LIMIT: RateLimit;
 	DEPOSITION_RATE_LIMIT: RateLimit;
+	AI_BUDGET: RateLimit;
+	AI_CONCURRENCY: RateLimit;
 	AI: Ai;
 	IMAGES: ImagesBinding;
 	ASSETS: Fetcher;

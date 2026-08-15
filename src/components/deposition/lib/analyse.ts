@@ -1,6 +1,7 @@
 import type { LiabilityIssue } from "@/lib/types";
 import type { AtlasIndex } from "@/components/atlas/lib/atlas-data";
 import { searchNodes } from "@/components/atlas/lib/search";
+import { canStartLiveAnalysis, consentPayload, type DepositionAnalysisMode } from "./consent";
 import type { ParsedDocument } from "./parse-file";
 
 export interface AnalysisResult {
@@ -58,34 +59,39 @@ function normaliseIssues(raw: unknown): LiabilityIssue[] {
 export async function analyseDeposition(
   parsed: ParsedDocument,
   index: AtlasIndex | null,
-  signal?: AbortSignal,
+  options?: { signal?: AbortSignal; mode?: DepositionAnalysisMode; consent?: boolean },
 ): Promise<AnalysisResult> {
-  try {
-    const response = await fetch("/api/deposition", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        filename: parsed.filename,
-        text: parsed.text,
-        pages: parsed.pages,
-        pageCount: parsed.pageCount,
-      }),
-      signal,
-    });
-    if (response.ok) {
-      const payload: unknown = await response.json();
-      const issues = normaliseIssues(payload);
-      if (issues.length > 0) {
-        return {
-          issues,
-          summary:
-            isRecord(payload) && typeof payload.summary === "string" ? payload.summary : null,
-          source: "live",
-        };
+  const signal = options?.signal;
+  const mode = options?.mode ?? "local";
+  if (mode === "live" && canStartLiveAnalysis(options?.consent === true)) {
+    try {
+      const response = await fetch("/api/deposition", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          filename: parsed.filename,
+          text: parsed.text,
+          pages: parsed.pages,
+          pageCount: parsed.pageCount,
+          ...consentPayload(true),
+        }),
+        signal,
+      });
+      if (response.ok) {
+        const payload: unknown = await response.json();
+        const issues = normaliseIssues(payload);
+        if (issues.length > 0) {
+          return {
+            issues,
+            summary:
+              isRecord(payload) && typeof payload.summary === "string" ? payload.summary : null,
+            source: "live",
+          };
+        }
       }
+    } catch {
+      // Fall through to the local heuristic pass.
     }
-  } catch {
-    // Fall through to the local heuristic pass.
   }
 
   return localAnalysis(parsed, index);

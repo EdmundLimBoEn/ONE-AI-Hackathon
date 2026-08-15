@@ -19,6 +19,11 @@ import { loadIndex, type AtlasIndex } from "@/components/atlas/lib/atlas-data";
 import { useTheme } from "@/components/atlas/lib/use-theme";
 import { AtlasLogo } from "@/components/atlas/top-bar";
 import { analyseDeposition } from "./lib/analyse";
+import {
+  canStartLiveAnalysis,
+  liveAnalysisDisclosure,
+  type DepositionAnalysisMode,
+} from "./lib/consent";
 import { parseFile, parseSampleUrl, type ParsedDocument } from "./lib/parse-file";
 import { Dropzone } from "./dropzone";
 import { IssueCard } from "./issue-cards";
@@ -56,6 +61,8 @@ export function DepositionWorkspace() {
   const [summary, setSummary] = useState<string | null>(null);
   const [analysisSource, setAnalysisSource] = useState<"live" | "local" | null>(null);
   const [analysing, setAnalysing] = useState(false);
+  const [mode, setMode] = useState<DepositionAnalysisMode>("local");
+  const [consent, setConsent] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -80,6 +87,7 @@ export function DepositionWorkspace() {
     setAnalysisSource(null);
     setError(null);
     setPage(0);
+    setConsent(false);
   }, []);
 
   const ingest = useCallback(async (load: () => Promise<ParsedDocument>) => {
@@ -88,6 +96,7 @@ export function DepositionWorkspace() {
     setIssues(null);
     setSummary(null);
     setAnalysisSource(null);
+    setConsent(false);
     try {
       const document = await load();
       setParsed(document);
@@ -102,11 +111,16 @@ export function DepositionWorkspace() {
 
   const run = useCallback(async () => {
     if (!parsed || analysing) return;
+    if (mode === "live" && !canStartLiveAnalysis(consent)) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setAnalysing(true);
     try {
-      const result = await analyseDeposition(parsed, index, controller.signal);
+      const result = await analyseDeposition(parsed, index, {
+        signal: controller.signal,
+        mode,
+        consent,
+      });
       setIssues(result.issues);
       setSummary(result.summary);
       setAnalysisSource(result.source);
@@ -114,7 +128,7 @@ export function DepositionWorkspace() {
       setAnalysing(false);
       abortRef.current = null;
     }
-  }, [analysing, index, parsed]);
+  }, [analysing, consent, index, mode, parsed]);
 
   const pageText = useMemo(() => parsed?.pages[page] ?? "", [page, parsed]);
 
@@ -164,9 +178,9 @@ export function DepositionWorkspace() {
               Test a transcript against the precedent map.
             </h1>
             <p className="mt-3 text-[15px] leading-relaxed text-muted">
-              Drop in a deposition and the analyser extracts the text in your browser, surfaces the
-              liability issues it raises, and links each one to the Singapore authorities that
-              govern it.
+              Drop in a deposition. Text is extracted in your browser. Analyse locally, or send the
+              transcript to OpenRouter after you accept the disclosure. Each issue is linked to
+              the Singapore authorities that govern it.
             </p>
 
             <div className="mt-7">
@@ -271,21 +285,63 @@ export function DepositionWorkspace() {
                   </h2>
                   <p className="text-[11.5px] text-faint">
                     {analysisSource === "live"
-                      ? "Returned by the analysis service"
+                      ? "Returned by OpenRouter under no-storage / ZDR"
                       : analysisSource === "local"
-                        ? "Local keyword pass — the analysis service is offline"
+                        ? "Local keyword pass — nothing was uploaded"
                         : "Not run yet"}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => void run()}
-                  disabled={analysing}
+                  disabled={analysing || (mode === "live" && !canStartLiveAnalysis(consent))}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3.5 py-2 text-[13px] font-semibold text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   {analysing ? <Spinner className="border-t-accent-ink" /> : <Play aria-hidden className="size-3.5" />}
-                  {issues ? "Re-run analysis" : "Analyse transcript"}
+                  {mode === "local"
+                    ? issues
+                      ? "Re-run locally"
+                      : "Analyse locally"
+                    : issues
+                      ? "Re-run with OpenRouter"
+                      : "Analyse with OpenRouter"}
                 </button>
+              </div>
+
+              <div className="mt-3 rounded-lg border border-line bg-panel px-3.5 py-3">
+                <div className="flex rounded-md border border-line p-0.5">
+                  <ModeButton
+                    label="Local only"
+                    active={mode === "local"}
+                    onClick={() => setMode("local")}
+                  />
+                  <ModeButton
+                    label="OpenRouter"
+                    active={mode === "live"}
+                    onClick={() => setMode("live")}
+                  />
+                </div>
+                {mode === "live" ? (
+                  <>
+                    <p className="mt-2.5 text-[12px] leading-relaxed text-muted">
+                      {liveAnalysisDisclosure()}
+                    </p>
+                    <label className="mt-2 flex items-start gap-2 text-[12.5px] leading-snug text-ink">
+                      <input
+                        type="checkbox"
+                        checked={consent}
+                        onChange={(event) => setConsent(event.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>I understand and consent to sending this transcript to OpenRouter.</span>
+                    </label>
+                  </>
+                ) : (
+                  <p className="mt-2.5 text-[12px] leading-relaxed text-muted">
+                    Local analysis stays in this browser. It uses a keyword pass over the extracted
+                    text and does not call the analysis API or OpenRouter.
+                  </p>
+                )}
               </div>
 
               {summary ? (
@@ -322,7 +378,7 @@ export function DepositionWorkspace() {
                     <EmptyState
                       icon={<ScanSearch className="size-6" />}
                       title="Ready when you are"
-                      hint="Run the analysis to surface the liability issues in this transcript and the Singapore authorities that bear on them."
+                      hint="Choose local or OpenRouter analysis to surface the liability issues in this transcript and the Singapore authorities that bear on them."
                     />
                   </div>
                 )}
@@ -338,6 +394,30 @@ export function DepositionWorkspace() {
         )}
       </main>
     </div>
+  );
+}
+
+function ModeButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "flex-1 rounded-[5px] px-2.5 py-1.5 text-[12px] font-medium transition-colors",
+        active ? "bg-accent-wash text-ink" : "text-muted hover:text-ink",
+      )}
+    >
+      {label}
+    </button>
   );
 }
 

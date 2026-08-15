@@ -16,7 +16,7 @@ Repository: [github.com/EdmundLimBoEn/Singapore-Law-Atlas](https://github.com/Ed
 | **Tree / Folders** | Hierarchical browse by legal domain → topic → judgment or statute. |
 | **Reader** | Summary, relevant laws & sections, expandable full text, footer quick summary, SSO / eLitigation link. |
 | **Atlas counsel** | RAG chat over the corpus with inline, clickable authority cites. |
-| **Deposition analysis** | Client-side PDF/text extraction and liability issue spotting against the atlas. |
+| **Deposition analysis** | Client-side PDF/text extraction and liability issue spotting against the atlas. Local keyword pass by default; live analysis sends the transcript to OpenRouter only after an explicit disclosure and consent. |
 
 ## Written law first
 
@@ -59,6 +59,8 @@ Production bindings (`wrangler.jsonc`):
 - `LAW_VAULT` → R2 bucket `law-vault`
 - `LAW_CORPUS` → 768-dimension cosine Vectorize index `law-corpus`
 - `AI` → Workers AI
+- `AI_RATE_LIMIT` / `DEPOSITION_RATE_LIMIT` → per-IP request caps
+- `AI_BUDGET` / `AI_CONCURRENCY` → deployment-wide work-unit budget and concurrency circuit breaker; exhausted budget falls back to local fixtures
 - `OPENROUTER_API_KEY` → Wrangler secret (never committed)
 
 ## Local setup
@@ -128,7 +130,7 @@ Details: [`pipeline/README.md`](pipeline/README.md).
 | `GET` | `/api/doc/:id` | Markdown document (statutes include full digests) |
 | `POST` | `/api/search` | `{ "query", "topK?" }` |
 | `POST` | `/api/chat` | `{ "messages", "topK?" }` — SSE stream + citations |
-| `POST` | `/api/deposition` | `{ "text", "filename?" }` |
+| `POST` | `/api/deposition` | `{ "text", "filename?", "externalProcessingConsent?" }` — OpenRouter is used only when consent is `true` |
 
 ## Verification
 

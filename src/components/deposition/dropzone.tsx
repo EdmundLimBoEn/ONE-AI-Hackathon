@@ -88,8 +88,8 @@ export function Dropzone({
               compact ? "text-[11.5px]" : "mt-1 text-[13px] leading-relaxed",
             )}
           >
-            PDF or plain text, parsed in your browser. Nothing is uploaded until you run the
-            analysis.
+            PDF or plain text, parsed in your browser. Nothing is uploaded until you run live
+            OpenRouter analysis and accept the disclosure.
           </p>
         </div>
 

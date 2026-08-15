@@ -1,4 +1,6 @@
 import type { LiabilityIssue, SearchResult } from "@/lib/types";
+import type { AiBudget } from "./ai-budget";
+import { COMPLETION_UNITS } from "./ai-budget";
 import type { ServerRuntime } from "./runtime";
 import { completeJson } from "./openrouter";
 import {
@@ -69,13 +71,18 @@ function precedentSubset(results: SearchResult[]): LiabilityIssue["precedents"] 
   return results.map(({ docId, title, citation, excerpt }) => ({ docId, title, citation, excerpt }));
 }
 
-export async function analyzeDeposition(runtime: ServerRuntime, text: string): Promise<LiabilityIssue[]> {
+export async function analyzeDeposition(
+  runtime: ServerRuntime,
+  text: string,
+  options: { consent?: boolean; budget?: AiBudget } = {},
+): Promise<LiabilityIssue[]> {
+  const allowExternal = Boolean(options.consent && runtime.openRouterKey);
   let spotted = fallbackIssues(text);
-  if (runtime.openRouterKey) {
+  if (allowExternal && (await consumeOrSkip(options.budget, COMPLETION_UNITS))) {
     try {
       spotted = normalizeIssues(
         await completeJson<IssueResponse>(
-          runtime.openRouterKey,
+          runtime.openRouterKey!,
           buildIssueSpottingMessages(text),
           { privacy: "no-storage", maxTokens: 1_200 },
         ),
@@ -89,11 +96,11 @@ export async function analyzeDeposition(runtime: ServerRuntime, text: string): P
   const withPrecedents: RetrievedIssue[] = await Promise.all(
     spotted.map(async (issue) => ({
       ...issue,
-      precedents: await retrieve(runtime.env, `${issue.issue}: ${issue.facts}`, 3),
+      precedents: await retrieve(runtime.env, `${issue.issue}: ${issue.facts}`, 3, options.budget),
     })),
   );
 
-  if (!runtime.openRouterKey) {
+  if (!allowExternal || !(await consumeOrSkip(options.budget, COMPLETION_UNITS))) {
     return withPrecedents.map((issue) => ({
       issue: issue.issue,
       severity: issue.severity,
@@ -106,7 +113,7 @@ export async function analyzeDeposition(runtime: ServerRuntime, text: string): P
   let response: AssessmentResponse;
   try {
     response = await completeJson<AssessmentResponse>(
-      runtime.openRouterKey,
+      runtime.openRouterKey!,
       buildAssessmentMessages(withPrecedents),
       { privacy: "no-storage", maxTokens: 1_600 },
     );
@@ -137,4 +144,8 @@ export async function analyzeDeposition(runtime: ServerRuntime, text: string): P
       precedents: precedentSubset(issue.precedents),
     };
   });
+}
+
+async function consumeOrSkip(budget: AiBudget | undefined, units: number): Promise<boolean> {
+  return budget ? budget.consume(units) : true;
 }

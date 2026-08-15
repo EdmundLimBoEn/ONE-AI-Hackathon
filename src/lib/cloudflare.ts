@@ -6,6 +6,8 @@ export interface LawAtlasEnv {
   AI: Ai;
   AI_RATE_LIMIT: RateLimit;
   DEPOSITION_RATE_LIMIT: RateLimit;
+  AI_BUDGET: RateLimit;
+  AI_CONCURRENCY: RateLimit;
   OPENROUTER_API_KEY: string;
 }
 

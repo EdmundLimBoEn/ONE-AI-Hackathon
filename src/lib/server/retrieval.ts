@@ -2,6 +2,8 @@ import graphFixture from "@/fixtures/graph.json";
 import { ensureCompleteSummary } from "@/lib/document-brief";
 import type { GraphData, GraphNode, SearchResult } from "@/lib/types";
 import type { LawAtlasEnv } from "@/lib/cloudflare";
+import type { AiBudget } from "./ai-budget";
+import { RETRIEVE_UNITS } from "./ai-budget";
 import { ApiError, withTimeout } from "./errors";
 
 const PRIMARY_EMBEDDING_MODEL = "@cf/baai/bge-m3" as const;
@@ -90,8 +92,14 @@ function metadataString(metadata: Record<string, unknown>, key: string): string 
   return typeof value === "string" ? value : "";
 }
 
-export async function retrieve(env: LawAtlasEnv | null, query: string, topK: number): Promise<SearchResult[]> {
+export async function retrieve(
+  env: LawAtlasEnv | null,
+  query: string,
+  topK: number,
+  budget?: AiBudget,
+): Promise<SearchResult[]> {
   if (!env?.AI || !env.LAW_CORPUS) return searchFixtures(query, topK);
+  if (budget && !(await budget.consume(RETRIEVE_UNITS))) return searchFixtures(query, topK);
 
   const vector = await embedQuery(env, query);
   const matches = await withTimeout(

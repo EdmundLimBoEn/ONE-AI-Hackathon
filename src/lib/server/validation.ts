@@ -80,6 +80,7 @@ export function validateChatInput(value: unknown): ChatInput {
 export interface DepositionInput {
   text: string;
   filename?: string;
+  externalProcessingConsent: boolean;
 }
 
 export function validateDepositionInput(value: unknown): DepositionInput {
@@ -90,7 +91,16 @@ export function validateDepositionInput(value: unknown): DepositionInput {
   return {
     text: boundedString(value.text, "text", MAX_DEPOSITION_LENGTH, 40),
     filename,
+    externalProcessingConsent: optionalBoolean(value.externalProcessingConsent, "externalProcessingConsent"),
   };
+}
+
+function optionalBoolean(value: unknown, field: string): boolean {
+  if (value === undefined) return false;
+  if (typeof value !== "boolean") {
+    throw new ApiError(400, "invalid_request", `${field} must be a boolean.`);
+  }
+  return value;
 }
 
 async function readBoundedText(request: Request, maximumBytes: number): Promise<string> {
