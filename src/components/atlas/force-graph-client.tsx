@@ -16,7 +16,7 @@ export interface ForceGraphHandle {
   centerAt: (x?: number, y?: number, ms?: number) => void;
   zoom: (k?: number, ms?: number) => number | void;
   graph2ScreenCoords?: (x: number, y: number) => { x: number; y: number };
-  d3Force?: (name: string) => unknown;
+  d3Force?: (name: string, force?: unknown) => unknown;
   d3ReheatSimulation?: () => void;
 }
 

@@ -18,6 +18,8 @@ const CATEGORY_VARS: Record<string, string> = {
   "constitutional & administrative law": "--cat-constitutional",
   "constitutional law": "--cat-constitutional",
   "administrative law": "--cat-constitutional",
+  "civil procedure": "--cat-procedure",
+  "intellectual property": "--cat-intellectual",
   statutes: "--cat-statute",
   legislation: "--cat-statute",
 };
@@ -28,6 +30,8 @@ const FALLBACK_VARS = [
   "--cat-family",
   "--cat-employment",
   "--cat-constitutional",
+  "--cat-procedure",
+  "--cat-intellectual",
   "--cat-criminal",
 ];
 

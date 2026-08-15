@@ -28,8 +28,12 @@ interface SimNode {
   node: GraphNode;
   category: string;
   radius: number;
+  clusterX: number;
+  clusterY: number;
   x?: number;
   y?: number;
+  vx?: number;
+  vy?: number;
 }
 
 interface SimLink {
@@ -89,30 +93,36 @@ export function GraphView({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const [anchoredTooltipPosition, setAnchoredTooltipPosition] = useState({ x: 0, y: 0 });
   const [tooltipAnchor, setTooltipAnchor] = useState<"pointer" | "node">("pointer");
 
   const palette = usePalette(theme);
 
-  // Stable node objects: the simulation writes x/y onto these, so reusing the
-  // same references preserves the layout when the view unmounts and returns.
-  const cache = useRef(new Map<string, SimNode>());
   const data = useMemo(() => {
+    const categoryNames = [...new Set(index.graph.nodes.map((node) => categoryOf(node.categoryPath)))].sort();
+    const categoryCounts = new Map<string, number>();
+    const clusterRadius = Math.max(300, categoryNames.length * 38);
     const nodes = index.graph.nodes.map((node) => {
-      const radius = 4.2 + Math.sqrt(node.degree) * 2.1;
-      const existing = cache.current.get(node.id);
-      if (existing) {
-        existing.node = node;
-        existing.category = categoryOf(node.categoryPath);
-        existing.radius = radius;
-        return existing;
-      }
+      const category = categoryOf(node.categoryPath);
+      const categoryIndex = categoryNames.indexOf(category);
+      const clusterAngle = (categoryIndex / Math.max(1, categoryNames.length)) * Math.PI * 2 - Math.PI / 2;
+      const clusterX = Math.cos(clusterAngle) * clusterRadius;
+      const clusterY = Math.sin(clusterAngle) * clusterRadius;
+      const ordinal = categoryCounts.get(category) ?? 0;
+      categoryCounts.set(category, ordinal + 1);
+      const localAngle = ordinal * 2.399963229728653 + hashUnit(node.id) * 0.8;
+      const localRadius = 18 + Math.sqrt(ordinal) * 23;
+      const radius = Math.min(28, 3.6 + Math.sqrt(Math.max(0, node.degree)) * 2.5);
       const created: SimNode = {
         id: node.id,
         node,
-        category: categoryOf(node.categoryPath),
+        category,
         radius,
+        clusterX,
+        clusterY,
+        x: clusterX + Math.cos(localAngle) * localRadius,
+        y: clusterY + Math.sin(localAngle) * localRadius,
       };
-      cache.current.set(node.id, created);
       return created;
     });
     const links: SimLink[] = index.graph.edges.map((edge) => ({
@@ -123,6 +133,7 @@ export function GraphView({
     }));
     return { nodes, links };
   }, [index]);
+  const nodeById = useMemo(() => new Map(data.nodes.map((node) => [node.id, node])), [data.nodes]);
 
   useEffect(() => {
     const element = wrapRef.current;
@@ -141,6 +152,28 @@ export function GraphView({
 
   const handleReady = useCallback((handle: ForceGraphHandle | null) => {
     graphRef.current = handle;
+    if (!handle) return;
+    try {
+      const charge = handle.d3Force?.("charge") as {
+        strength?: (value: number | ((node: SimNode) => number)) => unknown;
+        distanceMax?: (value: number) => unknown;
+      } | undefined;
+      charge?.strength?.((node) => -105 - node.radius * 7);
+      charge?.distanceMax?.(720);
+
+      const link = handle.d3Force?.("link") as {
+        distance?: (value: number | ((edge: SimLink) => number)) => unknown;
+        strength?: (value: number | ((edge: SimLink) => number)) => unknown;
+      } | undefined;
+      link?.distance?.((edge) => edge.kind === "shared-tag" ? 88 : 128);
+      link?.strength?.((edge) => edge.kind === "shared-tag" ? 0.08 : 0.2);
+
+      handle.d3Force?.("clusters", createClusterForce());
+      handle.d3Force?.("collide", createCollisionForce(7));
+      handle.d3ReheatSimulation?.();
+    } catch {
+      // The graph remains usable if a future force-graph release changes its internals.
+    }
   }, []);
 
   const zoomBy = useCallback((factor: number) => {
@@ -179,7 +212,8 @@ export function GraphView({
       const isFocused = focusedId === node.id;
       const color = palette.category(node.category);
 
-      ctx.globalAlpha = dim ? 0.16 : 1;
+      // Search and topic filters reduce emphasis without removing any files.
+      ctx.globalAlpha = dim ? 0.34 : 1;
 
       if (isActive || isSelected) {
         ctx.beginPath();
@@ -209,7 +243,7 @@ export function GraphView({
         ctx.stroke();
       }
 
-      const showLabel = scale > 1.1 || isActive || isSelected || node.node.degree >= 6;
+      const showLabel = scale > 1.35 || isActive || isSelected || node.node.degree >= 10;
       if (showLabel && !dim) {
         const fontSize = Math.max(9, 11 / scale);
         ctx.font = `${isSelected ? 600 : 500} ${fontSize}px ${palette.fontSans}`;
@@ -273,7 +307,7 @@ export function GraphView({
     [endpoints, selectedId],
   );
 
-  const nodeVal = useCallback((node: SimNode) => Math.max(1, node.radius * 0.6), []);
+  const nodeVal = useCallback((node: SimNode) => Math.max(1, (node.radius * node.radius) / 18), []);
 
   const orderedNodes = useMemo(
     () =>
@@ -283,15 +317,20 @@ export function GraphView({
     [activeCategories, index.graph.nodes],
   );
 
-  const focusNode = useCallback((id: string | null, center = true) => {
-    setFocusedId(id);
-    setTooltipAnchor("node");
-    if (!id || !center) return;
-    const target = cache.current.get(id);
-    if (target?.x !== undefined && target.y !== undefined) {
-      graphRef.current?.centerAt(target.x, target.y, 320);
-    }
-  }, []);
+  const focusNode = useCallback(
+    (id: string | null, center = true) => {
+      setFocusedId(id);
+      setTooltipAnchor("node");
+      if (!id || !center) return;
+      const target = nodeById.get(id);
+      if (target?.x !== undefined && target.y !== undefined) {
+        graphRef.current?.centerAt(target.x, target.y, 320);
+        const screen = graphRef.current?.graph2ScreenCoords?.(target.x, target.y);
+        if (screen) setAnchoredTooltipPosition(screen);
+      }
+    },
+    [nodeById],
+  );
 
   const onKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -353,16 +392,7 @@ export function GraphView({
     [focusNode, focusedId, onSelect, orderedNodes, selectedId, zoomBy],
   );
 
-  const handleEngineStop = useCallback(() => {
-    const graph = graphRef.current;
-    if (!graph) return;
-    try {
-      const charge = graph.d3Force?.("charge") as { strength?: (v: number) => void } | undefined;
-      charge?.strength?.(-190);
-    } catch {
-      // Force internals are best-effort tuning only.
-    }
-  }, []);
+  const handleEngineStop = useCallback(() => undefined, []);
 
   const fittedRef = useRef(false);
   useEffect(() => {
@@ -375,17 +405,7 @@ export function GraphView({
   }, [size.width]);
 
   const tooltipNode = activeId ? index.docsById.get(activeId) : null;
-  const tooltipPosition = useMemo(() => {
-    if (tooltipAnchor === "node" && activeId) {
-      const target = cache.current.get(activeId);
-      const screen =
-        target?.x !== undefined && target.y !== undefined
-          ? graphRef.current?.graph2ScreenCoords?.(target.x, target.y)
-          : undefined;
-      if (screen) return screen;
-    }
-    return pointer;
-  }, [activeId, pointer, tooltipAnchor]);
+  const tooltipPosition = tooltipAnchor === "node" ? anchoredTooltipPosition : pointer;
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-panel">
@@ -437,9 +457,11 @@ export function GraphView({
         <GraphTooltip node={tooltipNode} position={tooltipPosition} palette={palette} />
       ) : null}
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-3">
+      <div className="pointer-events-none absolute bottom-0 left-0 p-3">
         <GraphLegend index={index} activeCategories={activeCategories} palette={palette} />
-        <div className="pointer-events-auto flex flex-col gap-1 rounded-lg border border-line bg-panel/90 p-1 backdrop-blur">
+      </div>
+
+      <div className="pointer-events-auto absolute top-3 right-3 flex flex-col gap-1 rounded-lg border border-line bg-panel/90 p-1 backdrop-blur">
           <IconButton label="Zoom in" size="sm" onClick={() => zoomBy(1.35)}>
             <Plus className="size-4" />
           </IconButton>
@@ -461,7 +483,6 @@ export function GraphView({
           >
             <Crosshair className="size-4" />
           </IconButton>
-        </div>
       </div>
 
       <p id="graph-live" aria-live="polite" className="sr-only">
@@ -629,4 +650,63 @@ function shortTitle(title: string): string {
   const trimmed = primary.replace(/\s+(Pte|Ltd|LLC|LLP)\.?/gi, "").trim();
   const base = trimmed.length > 2 ? trimmed : title;
   return base.length > 26 ? `${base.slice(0, 25)}…` : base;
+}
+
+function hashUnit(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+type AtlasForce = ((alpha: number) => void) & { initialize: (nodes: SimNode[]) => void };
+
+function createClusterForce(): AtlasForce {
+  let nodes: SimNode[] = [];
+  const force = ((alpha: number) => {
+    const pull = alpha * 0.115;
+    for (const node of nodes) {
+      if (node.x === undefined || node.y === undefined) continue;
+      node.vx = (node.vx ?? 0) + (node.clusterX - node.x) * pull;
+      node.vy = (node.vy ?? 0) + (node.clusterY - node.y) * pull;
+    }
+  }) as AtlasForce;
+  force.initialize = (next) => {
+    nodes = next;
+  };
+  return force;
+}
+
+function createCollisionForce(padding: number): AtlasForce {
+  let nodes: SimNode[] = [];
+  const force = ((alpha: number) => {
+    const push = Math.max(0.18, alpha) * 0.42;
+    for (let leftIndex = 0; leftIndex < nodes.length; leftIndex++) {
+      const left = nodes[leftIndex];
+      if (left.x === undefined || left.y === undefined) continue;
+      for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex++) {
+        const right = nodes[rightIndex];
+        if (right.x === undefined || right.y === undefined) continue;
+        let dx = right.x - left.x;
+        let dy = right.y - left.y;
+        if (dx === 0 && dy === 0) dx = 0.01;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const minimum = left.radius + right.radius + padding;
+        if (distance >= minimum) continue;
+        const overlap = ((minimum - distance) / distance) * push;
+        dx *= overlap;
+        dy *= overlap;
+        left.vx = (left.vx ?? 0) - dx;
+        left.vy = (left.vy ?? 0) - dy;
+        right.vx = (right.vx ?? 0) + dx;
+        right.vy = (right.vy ?? 0) + dy;
+      }
+    }
+  }) as AtlasForce;
+  force.initialize = (next) => {
+    nodes = next;
+  };
+  return force;
 }

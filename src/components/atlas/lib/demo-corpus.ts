@@ -1,4 +1,5 @@
 import type { DocMeta } from "@/lib/types";
+import recentCorpus from "@/fixtures/recent-corpus.json";
 
 /**
  * Offline demo corpus. Only used when neither the live index nor the checked-in
@@ -9,7 +10,7 @@ export type DemoDoc = DocMeta & { content?: string };
 
 const EL = "https://www.elitigation.sg/gd/s/";
 
-export const DEMO_DOCS: DemoDoc[] = [
+const CURATED_DEMO_DOCS: DemoDoc[] = [
   {
     id: "spandeck-v-dsta-2007",
     title:
@@ -475,4 +476,11 @@ Sembcorp also laid down procedural requirements for adducing extrinsic evidence:
     sourceUrl: "https://sso.agc.gov.sg/Act/CONS1963",
     kind: "statute",
   },
+];
+
+const curatedCitations = new Set(CURATED_DEMO_DOCS.map((doc) => doc.citation));
+
+export const DEMO_DOCS: DemoDoc[] = [
+  ...CURATED_DEMO_DOCS,
+  ...(recentCorpus as DemoDoc[]).filter((doc) => !curatedCitations.has(doc.citation)),
 ];

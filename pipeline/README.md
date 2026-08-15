@@ -15,6 +15,12 @@ bun pipeline/upload.ts --dry-run
 bun pipeline/embed.ts --dry-run
 ```
 
+Refresh the checked-in graph demo from cached SGCA/SGHC judgments with:
+
+```bash
+bun pipeline/build-demo-corpus.ts
+```
+
 This copies three fixture judgments into `pipeline/raw/`, builds the vault in `pipeline/vault/`, and writes `pipeline/generated/graph.json` and `tree.json`.
 
 ## Live corpus run
